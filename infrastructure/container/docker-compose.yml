@@ -1,0 +1,14 @@
+services:
+  occupancy:
+    build:
+      context: ../..
+      dockerfile: infrastructure/container/Dockerfile
+    image: occupancy:latest
+    volumes:
+      - ../../src:/app/src:ro
+      - ../../configs:/app/configs:ro
+      - ${OCCUPANCY_OUTPUT_DIR:-../../outputs}:/app/outputs
+    environment:
+      PYTHONPATH: /app/src
+      OCCUPANCY_OUTPUT_DIR: /app/outputs
+    command: ["python", "-m", "occupancy"]

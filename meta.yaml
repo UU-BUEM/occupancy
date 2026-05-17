@@ -1,0 +1,36 @@
+package:
+  name: occupancy
+  version: "0.1.0"
+
+source:
+  path: .
+
+build:
+  number: 0
+  script: "{{ PYTHON }} setup.py install --single-version-externally-managed --record=record.txt"
+
+requirements:
+  host:
+    - python >=3.14
+    - setuptools >=68
+    - setuptools-scm >=8
+  run:
+    - python >=3.14
+    - numpy
+    - pandas
+
+test:
+  imports:
+    - occupancy
+  commands:
+    - python -m occupancy --help
+
+about:
+  summary: Stochastic occupancy and electricity profile modeling toolkit.
+  home: https://github.com/UU-BUEM/occupancy
+  license: MIT
+  license_file: LICENSE
+
+extra:
+  recipe-maintainers:
+    - SomadSahoo

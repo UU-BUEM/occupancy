@@ -1,0 +1,24 @@
+Bootstrap: docker
+From: continuumio/miniconda3:latest
+
+%files
+    infrastructure/env/occupancy_env.yml /opt/occupancy_env.yml
+    src/ /app/src/
+    configs/ /app/configs/
+
+%environment
+    export PATH=/opt/conda/envs/occupancy_env/bin:$PATH
+    export CONDA_DEFAULT_ENV=occupancy_env
+    export PYTHONPATH=/app/src
+
+%post
+    /opt/conda/bin/conda update -n base -c defaults conda -y --quiet
+    /opt/conda/bin/conda env create -f /opt/occupancy_env.yml
+    /opt/conda/bin/conda clean -afy
+    rm /opt/occupancy_env.yml
+
+%runscript
+    exec python -m occupancy "$@"
+
+%test
+    /opt/conda/envs/occupancy_env/bin/python -c "import numpy, pandas; print('OK')"
