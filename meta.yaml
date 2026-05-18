@@ -1,23 +1,25 @@
+{% set version = environ.get("GIT_DESCRIBE_TAG", "1.1.0").lstrip("v") %}
 package:
   name: occupancy
-  version: "0.1.0"
+  version: {{ version }}
 
 source:
   path: .
 
 build:
   number: 0
-  script: "{{ PYTHON }} setup.py install --single-version-externally-managed --record=record.txt"
+  script: "{{ PYTHON }} -m pip install . --no-deps -vv"
 
 requirements:
   host:
-    - python >=3.14
+    - python >=3.12
+    - pip
     - setuptools >=68
     - setuptools-scm >=8
   run:
-    - python >=3.14
-    - numpy
-    - pandas
+    - python >=3.12
+    - numpy >=1.26,<3
+    - pandas >=2.0,<3
 
 test:
   imports:

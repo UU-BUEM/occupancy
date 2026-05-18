@@ -21,7 +21,8 @@ conda-bld/
 .mypy_cache/
 .pytest_cache/
 .pytype/
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .dmypy.json
 .ruff_cache/
 .pytest_cache/
@@ -31,6 +32,7 @@ htmlcov/
 # Local runtime artifacts
 outputs/
 data/
+!src/occupancy/config/data/
 *.sif
 *.nc
 *.nc4
@@ -44,7 +46,6 @@ data/
 *.conda
 
 # IDE / OS
-.vscode/settings.json
 .idea/
 .DS_Store
 Thumbs.db
@@ -57,3 +58,6 @@ Thumbs.db
 
 # Git Push
 push.sh
+
+# Context
+occupancy_improvement*.txt

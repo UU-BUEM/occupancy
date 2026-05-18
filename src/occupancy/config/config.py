@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +17,8 @@ from occupancy.electricity.electricity_consumption import (
     ElectricityConsumptionProfile,
 )
 
-_DEFAULT_SCENARIO_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "configs"
-    / "default_scenario.json"
+_DEFAULT_SCENARIO_PATH = files("occupancy.config").joinpath(
+    "data/default_scenario.json"
 )
 
 
@@ -63,7 +62,7 @@ class ScenarioConfig:
 
     @classmethod
     def default(cls) -> ScenarioConfig:
-        return load_scenario_config(_DEFAULT_SCENARIO_PATH)
+        return load_scenario_config()
 
     @classmethod
     def from_mapping(cls, mapping: dict[str, Any]) -> ScenarioConfig:
@@ -115,7 +114,8 @@ class ScenarioConfig:
         )
 
 
-def load_scenario_config(path: str | Path) -> ScenarioConfig:
-    with Path(path).open("r", encoding="utf-8") as handle:
+def load_scenario_config(path: str | Path | None = None) -> ScenarioConfig:
+    target = _DEFAULT_SCENARIO_PATH if path is None else Path(path)
+    with target.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
     return ScenarioConfig.from_mapping(data)

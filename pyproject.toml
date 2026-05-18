@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "setuptools-scm>=8"]
+requires = ["setuptools>=68", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Stochastic occupancy and residential electricity profile modeling for UU-BUEM."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 authors = [
   { name = "Somadutta Sahoo", email = "s.sahoo@uu.nl" },
 ]
@@ -16,14 +16,13 @@ keywords = ["occupancy", "building-energy", "stochastic-modeling", "UU-BUEM"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-  "numpy>=1.24",
-  "pandas>=2.0",
+  "numpy>=1.26,<3.0",
+  "pandas>=2.0,<3.0",
 ]
 
 [project.optional-dependencies]
@@ -46,15 +45,18 @@ Repository = "https://github.com/UU-BUEM/occupancy"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"occupancy.config" = ["data/*.json"]
+
 [tool.setuptools_scm]
-fallback_version = "0.1.0"
+fallback_version = "1.1.0"
 version_scheme = "guess-next-dev"
 local_scheme = "node-and-date"
 write_to = "src/occupancy/_version.py"
 
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+target-version = "py312"
 src = ["src"]
 
 [tool.ruff.lint]
@@ -65,7 +67,7 @@ ignore = ["E501"]
 known-first-party = ["occupancy"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.12"
 strict = false
 ignore_missing_imports = true
 packages = ["occupancy"]

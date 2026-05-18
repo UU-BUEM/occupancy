@@ -45,20 +45,14 @@ $srcPath = Join-Path $repoRoot "src"
 $outputDir = Join-Path $repoRoot "outputs"
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
-conda env config vars set -n $EnvName OCCUPANCY_OUTPUT_DIR=$outputDir PYTHONPATH=$srcPath
+conda env config vars set -n $EnvName OCCUPANCY_OUTPUT_DIR=$outputDir
 
-# Create the 'occupancy' console entry point.
-# conda develop src is NOT used here (requires conda-build which has known
-# libarchive issues on Windows). A lightweight .bat wrapper achieves the same.
-Write-Host "Creating 'occupancy' console entry point..."
-$envPrefix = (conda run -n $EnvName python -c "import sys; print(sys.prefix)").Trim()
-if ($envPrefix) {
-    $wrapperPath = Join-Path $envPrefix "Scripts\occupancy.bat"
-    "@python -m occupancy %*" | Set-Content -Path $wrapperPath -Encoding ASCII
-    Write-Host "  Console script  : $wrapperPath" -ForegroundColor Green
-} else {
-    Write-Warning "Could not locate env prefix; skipping console script."
-}
+Write-Host "Installing occupancy package in editable mode..."
+conda run -n $EnvName pip install -e . --no-deps
+
+Write-Host ""
+Write-Host "Verifying installation..."
+conda run -n $EnvName python -m occupancy --help
 
 Write-Host ""
 Write-Host "================================================================"

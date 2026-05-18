@@ -46,18 +46,23 @@ if errorlevel 1 (
 if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
 
 echo Configuring environment variables...
-conda env config vars set -n "%ENV_NAME%" OCCUPANCY_OUTPUT_DIR="%OUTPUT_DIR%" PYTHONPATH="%SRC_PATH%"
+conda env config vars set -n "%ENV_NAME%" OCCUPANCY_OUTPUT_DIR="%OUTPUT_DIR%"
 if errorlevel 1 (
     echo ERROR: failed to configure conda environment variables.
     exit /b 1
 )
 
 echo.
-echo Creating 'occupancy' console entry point...
-for /f "tokens=*" %%P in ('powershell -NoProfile -Command "(conda info --json | ConvertFrom-Json).envs ^| Where-Object { $_ -match '%ENV_NAME%' } ^| Select-Object -First 1"') do (
-    powershell -NoProfile -Command "'@python -m occupancy %%*' | Set-Content -Path '%%P\Scripts\occupancy.bat' -Encoding ASCII"
-    echo   Console script: %%P\Scripts\occupancy.bat
+echo Installing occupancy package in editable mode...
+conda run -n "%ENV_NAME%" pip install -e . --no-deps
+if errorlevel 1 (
+    echo ERROR: pip install -e . failed.
+    exit /b 1
 )
+
+echo.
+echo Verifying installation...
+conda run -n "%ENV_NAME%" python -m occupancy --help
 
 echo.
 echo ================================================================
