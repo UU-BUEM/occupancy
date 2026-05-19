@@ -58,6 +58,10 @@ Thumbs.db
 
 # Git Push
 push.sh
+push.ps1
+.commit-message.md
+push.ps1
+.commit-message.md
 
 # Context
 occupancy_improvement*.txt

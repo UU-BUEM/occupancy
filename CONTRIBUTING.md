@@ -5,8 +5,7 @@ Thank you for contributing to occupancy.
 ## Development Setup
 
 ```powershell
-# Creates the conda environment, sets PYTHONPATH, and writes the 'occupancy'
-# console script into the env's Scripts/ directory:
+# Creates the conda environment and installs the package in editable mode:
 .\setup.ps1          # PowerShell
 setup.bat            # CMD
 
@@ -14,9 +13,8 @@ conda activate occupancy_env
 occupancy --help
 ```
 
-> **Do not run `conda develop src`.**  It requires `conda-build` and has known
-> `libarchive` issues on Windows.  PYTHONPATH is managed via
-> `conda env config vars` instead.
+> **Do not run `conda develop src`.**  Use `pip install -e . --no-deps` from
+> the repo root instead (this is what `setup.ps1` does automatically).
 
 ## Config Files
 

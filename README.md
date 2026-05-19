@@ -28,9 +28,12 @@ occupancy/
 │       ├── electricity/
 │       │   ├── __init__.py
 │       │   └── electricity_consumption.py
-│       └── internal_gains/
+│       ├── internal_gains/
+│       │   ├── __init__.py
+│       │   └── occupancy_profile.py
+│       └── visualization/
 │           ├── __init__.py
-│           └── occupancy_profile.py
+│           └── plots.py
 ├── configs/
 │   ├── default_scenario.json
 │   ├── occupancy_probabilities.json
@@ -45,7 +48,6 @@ occupancy/
 ├── tests/
 ├── pyproject.toml
 ├── meta.yaml
-├── setup.py
 ├── setup.ps1
 └── setup.bat
 ```
@@ -62,9 +64,9 @@ conda activate occupancy_env
 occupancy --help
 ```
 
-> `conda develop src` is **not** used here — `setup.ps1` sets `PYTHONPATH` via
-> `conda env config vars` and writes a lightweight `occupancy.bat` wrapper into
-> the env's `Scripts/` directory.  No `conda-build` or `pip` required.
+> `conda develop src` is **not** used here. `setup.ps1` creates the conda
+> environment and runs `pip install -e . --no-deps` from the repo root so the
+> editable install works correctly.
 
 Generate yearly occupancy profile:
 
@@ -102,13 +104,13 @@ values without touching the defaults.
 ## Docker
 
 ```bash
-# Build a self-contained image (src/ and configs/ are baked in):
+# Build the image (bind-mounts src/ and configs/ at runtime):
 docker compose -f infrastructure/container/docker-compose.yml build
 
-# Run (compose mounts local src/ and configs/ for live development):
+# Run (src/ and configs/ are bind-mounted for live development):
 docker compose -f infrastructure/container/docker-compose.yml up
 
-# Standalone run (no compose, uses baked-in code):
+# Standalone run:
 docker run --rm occupancy:latest python -m occupancy --help
 ```
 
@@ -121,4 +123,5 @@ ruff format .
 ruff check .
 pytest
 mypy src
+python validate.py
 ```

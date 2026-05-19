@@ -11,7 +11,7 @@ from occupancy.internal_gains.occupancy_profile import (
 try:
     from occupancy._version import __version__
 except ImportError:
-    __version__ = "1.1.0"
+    __version__ = "unknown"
 
 __all__ = [
     "OccupancyProfile",

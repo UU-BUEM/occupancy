@@ -41,7 +41,6 @@ if ($envExists -and -not $Force) {
     conda env create -f $envYml
 }
 
-$srcPath = Join-Path $repoRoot "src"
 $outputDir = Join-Path $repoRoot "outputs"
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
