@@ -1,0 +1,17 @@
+{
+  "_comment": "Illustrative defaults, not survey-calibrated. closed_months models the summer holiday via the generic fixed_schedule param -- no bespoke Python calendar logic needed.",
+  "id": "school",
+  "description": "Primary/secondary school. Weekday term-time hours, closed weekends and July-August.",
+  "region": "NL",
+  "capacity_default": 300,
+  "generator": "fixed_schedule",
+  "generator_params": {
+    "open_hour": 8,
+    "close_hour": 16,
+    "closed_weekends": true,
+    "closed_months": [7, 8],
+    "peak_occupancy_fraction": 0.85,
+    "active_fraction": 0.95,
+    "noise": 0.05
+  }
+}

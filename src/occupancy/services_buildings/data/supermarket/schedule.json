@@ -1,0 +1,18 @@
+{
+  "_comment": "Illustrative defaults, not survey-calibrated.",
+  "id": "supermarket",
+  "description": "Grocery retail. Open 7 days, extended weekday hours.",
+  "region": "NL",
+  "capacity_default": 80,
+  "generator": "fixed_schedule",
+  "generator_params": {
+    "open_hour": 8,
+    "close_hour": 21,
+    "weekend_open_hour": 9,
+    "weekend_close_hour": 18,
+    "closed_weekends": false,
+    "peak_occupancy_fraction": 0.6,
+    "active_fraction": 0.95,
+    "noise": 0.08
+  }
+}

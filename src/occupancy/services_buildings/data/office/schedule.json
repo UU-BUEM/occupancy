@@ -1,0 +1,16 @@
+{
+  "_comment": "Illustrative defaults, not survey-calibrated.",
+  "id": "office",
+  "description": "Office building. Weekday business hours, closed weekends.",
+  "region": "NL",
+  "capacity_default": 40,
+  "generator": "fixed_schedule",
+  "generator_params": {
+    "open_hour": 8,
+    "close_hour": 18,
+    "closed_weekends": true,
+    "peak_occupancy_fraction": 0.75,
+    "active_fraction": 0.9,
+    "noise": 0.1
+  }
+}

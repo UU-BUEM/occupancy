@@ -4,8 +4,92 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-24
+
+### Added (household equipment expansion)
+
+- `households/data/equipment.json` expanded from 7 illustrative appliances
+  to 29 real ones (Cold, Consumer Electronics + ICT, Cooking, Wet
+  categories), plus a new aggregate `lighting` item. `ownership_probability`,
+  `rated_power_kw`, and `standby_power_kw` are sourced from the CREST
+  Domestic Electricity Demand Model 1.0e (Richardson, Thomson, Infield --
+  Loughborough University CREST, obtained via the paper's own public
+  download link); hourly weekday/weekend weight shapes remain this repo's
+  own illustrative arrays, calibrated so each item's expected annual
+  triggered-use energy roughly matches CREST's reported figure. Water
+  heating and Electric Space Heating categories are deliberately excluded
+  (thermal loads belonging to buem's domain). See
+  `.claude/residential/resolved.md` for the full attribution/license
+  rationale.
+- `ownership_probability` (previously defined in `EquipmentSpec` but
+  unused) is now wired up: each household draws, once per seed, whether it
+  owns each sub-1.0-probability item (`ElectricityConsumptionProfile._owned_by_name`).
+- New `has_lighting` flag (`ElectricityConsumptionProfile`, `ScenarioConfig`,
+  CLI, `default_scenario.json`), alongside the existing `has_*` flags —
+  each now gates a *list* of individual equipment items rather than one
+  (e.g. `has_fridge` covers `chest_freezer`/`fridge_freezer`/`refrigerator`/
+  `upright_freezer`).
+
+### Breaking
+
+- Full restructuring for households + service buildings. `src/occupancy/internal_gains/`
+  and `src/occupancy/electricity/` are removed; root `configs/` is removed
+  (each subpackage now bundles its own `data/` via `importlib.resources`,
+  no more dual source-of-truth). `src/occupancy/_defaults.py` is removed.
+  Top-level `from occupancy import OccupancyProfile, ElectricityConsumptionProfile,
+  OccupancyResult` continues to work (now aliased to the new
+  `HouseholdProfile`); deep import paths do not — update
+  `occupancy.internal_gains.occupancy_profile.OccupancyProfile` →
+  `occupancy.households.HouseholdProfile`, and
+  `occupancy.electricity.electricity_consumption.ElectricityConsumptionProfile`
+  → `occupancy.households.ElectricityConsumptionProfile`.
+- Occupancy profile columns renamed `n_home` → `n_present` (generalized for
+  service buildings, which don't have a "home"); `activity` values renamed
+  `not_home`/`at_home_inactive`/`at_home_active` →
+  `not_present`/`present_inactive`/`present_active`.
+- `ElectricityConsumptionProfile`'s `weightage_table` constructor arg and
+  `get_weightage_table()` method are replaced by `equipment` and
+  `get_equipment_table()`, returning `dict[str, EquipmentSpec]` instead of
+  `dict[str, ApplianceWeights]`. `ScenarioConfig`'s JSON schema:
+  `electricity.weightage_table` → `electricity.equipment`.
+- Equipment item names changed with the CREST-informed expansion above:
+  `fridge` → `chest_freezer`/`fridge_freezer`/`refrigerator`/
+  `upright_freezer`; `cooking` → `hob`/`oven`/`microwave`/`kettle`/
+  `small_cooking_group`; `laundry` → `dish_washer`/`tumble_dryer`/
+  `washing_machine`/`washer_dryer`; `tv` → `tv_1`/`tv_2`/`tv_3`/`vcr_dvd`/
+  `tv_receiver_box`; `cleaning` → `vacuum`; `other` → 8 named electronics
+  items. `has_*` flags keep their old names and behavior (each now maps to
+  the corresponding list of new item names).
+
 ### Added
 
+- `src/occupancy/core/`: shared engine used by both households and service
+  buildings — `occupancy_engine.py` (pluggable generator-strategy registry:
+  `binomial_independent`, `markov_chain`, `fixed_schedule`), `equipment.py`
+  (config-driven `EquipmentSpec` + trigger-strategy registry:
+  `probabilistic_event`, `flat_always_on`, `sessions_per_week`,
+  `linear_in_occupants`), `result.py` (`OccupancyResult`, now wired up as
+  the shared output contract with `building_type`/`region` fields).
+- `src/occupancy/households/`: household occupancy + electricity modeling,
+  with a `HOUSEHOLD_ARCHETYPES` registry (`generic`, `working_couple`,
+  `family_with_children`, `retired_single`, `student_shared`) loaded from
+  `data/archetypes/*.json`. `fridge`, `ironing`, `other` — previously
+  hardcoded with no JSON representation — are now `EquipmentSpec` rows like
+  the other 4 appliances.
+- `working_couple` archetype uses the new `markov_chain` generator as a
+  proof-of-concept: a persistence-parameterized Markov chain over active-
+  occupant count (inspired by the CREST/Richardson/tsorb transition-
+  probability-matrix approach), synthesized at runtime from this repo's own
+  validated hourly probability arrays — not copied from any external
+  survey dataset. Other archetypes keep the original `binomial_independent`
+  generator (bit-for-bit reproducible under the same seed).
+- `src/occupancy/services_buildings/`: service (non-residential) building
+  modeling, starting with `supermarket`, `office`, `restaurant`, `school`.
+  Each type is a thin module (config path + registration) backed by
+  `data/<type>/{schedule.json,equipment.json}`; new types register via
+  `SERVICE_BUILDING_TYPES`.
+- CLI: `--building-type`, `--archetype`, `--region` flags (all default to
+  the pre-restructuring household behavior).
 - `validate.py` — repo-root validation script for conda env, CLI, tests, and
   package structure checks.
 - `push.ps1` — Windows push workflow ported from `UU-BUEM/weather`; supports

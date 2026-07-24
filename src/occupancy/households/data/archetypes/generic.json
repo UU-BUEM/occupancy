@@ -1,5 +1,11 @@
 {
-  "_comment": "Hourly probabilities for weekday [0] and weekend [1]. Index 0-23 = hour of day.",
+  "_comment": "Today's repo default, unchanged, kept byte-identical for regression purposes.",
+  "id": "generic",
+  "description": "Generic household with no assumed composition, parameterized only by occupant count. The pre-restructuring default.",
+  "region": "NL",
+  "num_persons_default": 3,
+  "generator": "binomial_independent",
+  "generator_params": {},
   "home_probabilities": [
     [0.10, 0.20],
     [0.10, 0.20],
@@ -51,5 +57,6 @@
     [0.20, 0.30],
     [0.10, 0.20],
     [0.05, 0.10]
-  ]
+  ],
+  "equipment_overrides": {}
 }

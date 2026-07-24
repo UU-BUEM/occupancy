@@ -1,0 +1,18 @@
+{
+  "_comment": "Illustrative defaults, not survey-calibrated.",
+  "id": "restaurant",
+  "description": "Food service. Open 7 days, lunch-to-late-evening hours.",
+  "region": "NL",
+  "capacity_default": 60,
+  "generator": "fixed_schedule",
+  "generator_params": {
+    "open_hour": 11,
+    "close_hour": 23,
+    "weekend_open_hour": 11,
+    "weekend_close_hour": 23,
+    "closed_weekends": false,
+    "peak_occupancy_fraction": 0.5,
+    "active_fraction": 0.95,
+    "noise": 0.12
+  }
+}
