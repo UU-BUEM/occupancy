@@ -49,7 +49,9 @@ StrategyFn = Callable[[EquipmentSpec, EquipmentContext], np.ndarray]
 
 
 def _weight(spec: EquipmentSpec, ctx: EquipmentContext) -> np.ndarray:
-    return np.where(ctx.is_weekend, spec.weekend[ctx.hours], spec.weekday[ctx.hours])
+    return np.where(
+        ctx.is_weekend, spec.weekend[ctx.hours], spec.weekday[ctx.hours]
+    )
 
 
 def _gate_mask(
@@ -77,7 +79,9 @@ def _gate_mask(
     return mask, percent_active
 
 
-def probabilistic_event(spec: EquipmentSpec, ctx: EquipmentContext) -> np.ndarray:
+def probabilistic_event(
+    spec: EquipmentSpec, ctx: EquipmentContext
+) -> np.ndarray:
     """Generalized "fires with some hourly probability" trigger, covering
     what were previously bespoke tv/cooking/laundry/cleaning methods.
 
@@ -125,7 +129,9 @@ def flat_always_on(spec: EquipmentSpec, ctx: EquipmentContext) -> np.ndarray:
     return np.full(len(ctx.profile), spec.rated_power_kw, dtype=float)
 
 
-def sessions_per_week(spec: EquipmentSpec, ctx: EquipmentContext) -> np.ndarray:
+def sessions_per_week(
+    spec: EquipmentSpec, ctx: EquipmentContext
+) -> np.ndarray:
     """Fires a fixed number of sessions per week at random active hours
     (e.g. ironing)."""
     power = np.zeros(len(ctx.profile), dtype=float)
@@ -136,13 +142,17 @@ def sessions_per_week(spec: EquipmentSpec, ctx: EquipmentContext) -> np.ndarray:
     n_sessions = int(len(ctx.profile) / (24 * 7) * sessions_per_wk)
     if len(possible_hours) > 0 and n_sessions > 0:
         chosen = ctx.rng.choice(
-            possible_hours, size=min(n_sessions, len(possible_hours)), replace=False
+            possible_hours,
+            size=min(n_sessions, len(possible_hours)),
+            replace=False,
         )
         power[chosen] = spec.rated_power_kw
     return power
 
 
-def linear_in_occupants(spec: EquipmentSpec, ctx: EquipmentContext) -> np.ndarray:
+def linear_in_occupants(
+    spec: EquipmentSpec, ctx: EquipmentContext
+) -> np.ndarray:
     """Draw scales linearly with the number of present occupants (e.g. a
     catch-all "other" plug-load category)."""
     n_present = ctx.profile["n_present"].to_numpy(dtype=float)
@@ -170,11 +180,14 @@ def get_strategy(name: str) -> StrategyFn:
         return _STRATEGIES[name]
     except KeyError as exc:
         raise ValueError(
-            f"Unknown equipment strategy {name!r}. Registered: {sorted(_STRATEGIES)}"
+            f"Unknown equipment strategy {name!r}. "
+            f"Registered: {sorted(_STRATEGIES)}"
         ) from exc
 
 
-def normalize_equipment_table(data: dict[str, Any]) -> dict[str, EquipmentSpec]:
+def normalize_equipment_table(
+    data: dict[str, Any],
+) -> dict[str, EquipmentSpec]:
     """Parse a raw JSON equipment mapping into ``EquipmentSpec`` objects."""
     specs: dict[str, EquipmentSpec] = {}
     for name, row in data.items():

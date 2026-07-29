@@ -2,10 +2,23 @@
 service buildings.
 
 Each strategy is a function ``(OccupancyGenerationContext) -> pd.DataFrame``
-producing an ``n_present``/``n_active``/``activity`` frame indexed by
-``ctx.index``. New strategies (from future reference occupancy modules)
-register via :func:`register_generator` — callers select one by name, no
-code change required elsewhere.
+producing an ``n_present``/``n_active``/``n_asleep``/``activity`` frame
+indexed by ``ctx.index``. New strategies (from future reference occupancy
+modules) register via :func:`register_generator` — callers select one by
+name, no code change required elsewhere.
+
+``n_asleep`` is drawn from the present-but-inactive share of occupants
+(``n_present - n_active``) via ``asleep_probabilities`` — a genuine model
+output, not a post-hoc heuristic (see
+:func:`occupancy.core.buem_adapter.to_buem_profiles`, which consumes it
+directly as buem's ``occ_sleeping``, for any building type). It defaults
+to an all-zero (24, 2) array, so any generator/building type that never
+supplies it always has ``n_asleep == 0`` (most service-building types —
+an office or supermarket has no sleeping occupants); a type that does
+have overnight occupants (e.g. a hotel) sets real
+``asleep_probabilities`` and gets genuine ``n_asleep`` output through the
+exact same mechanism households use. One shared schema, one shared sleep
+concept, for both.
 """
 
 from __future__ import annotations
@@ -23,17 +36,28 @@ import pandas as pd
 class OccupancyGenerationContext:
     """Everything a generator strategy needs to produce one profile.
 
-    ``home_probabilities``/``active_probabilities`` default to all-zero
-    (24, 2) arrays since they're only meaningful to the residential-style
-    strategies (``binomial_independent``, ``markov_chain``) — service
-    buildings typically use ``fixed_schedule`` instead and don't supply them.
+    ``home_probabilities``/``active_probabilities``/``asleep_probabilities``
+    default to all-zero (24, 2) arrays. ``home_probabilities``/
+    ``active_probabilities`` are only meaningful to the residential-style
+    strategies (``binomial_independent``, ``markov_chain``);
+    ``asleep_probabilities`` is meaningful to any strategy and any
+    building type with overnight occupants (households; hotel-style
+    service buildings via ``hourly_occupancy_curve``) — most service
+    building types simply never supply it, so ``n_asleep`` stays 0.
     """
 
     size: int
     index: pd.DatetimeIndex
     rng: np.random.Generator
-    home_probabilities: np.ndarray = field(default_factory=lambda: np.zeros((24, 2)))
-    active_probabilities: np.ndarray = field(default_factory=lambda: np.zeros((24, 2)))
+    home_probabilities: np.ndarray = field(
+        default_factory=lambda: np.zeros((24, 2))
+    )
+    active_probabilities: np.ndarray = field(
+        default_factory=lambda: np.zeros((24, 2))
+    )
+    asleep_probabilities: np.ndarray = field(
+        default_factory=lambda: np.zeros((24, 2))
+    )
     params: dict[str, Any] = field(default_factory=dict)
 
 
@@ -49,13 +73,15 @@ def _activity_label(present: int, active: int) -> str:
 
 
 def binomial_independent(ctx: OccupancyGenerationContext) -> pd.DataFrame:
-    """Independent per-hour binomial draw: ``n_present ~ Binomial(size, p_home)``,
+    """Independent per-hour binomial draw:
+    ``n_present ~ Binomial(size, p_home)``,
     ``n_active ~ Binomial(n_present, p_active)``. The original occupancy
     engine — kept as the default so existing behavior is reproducible bit
     for bit under the same seed.
     """
     n_present: list[int] = []
     n_active: list[int] = []
+    n_asleep: list[int] = []
     activity: list[str] = []
 
     for ts in ctx.index:
@@ -64,16 +90,29 @@ def binomial_independent(ctx: OccupancyGenerationContext) -> pd.DataFrame:
 
         p_home = ctx.home_probabilities[hour][weekend_index]
         p_active = ctx.active_probabilities[hour][weekend_index]
+        p_asleep = ctx.asleep_probabilities[hour][weekend_index]
 
         present = int(ctx.rng.binomial(ctx.size, p_home))
         active = int(ctx.rng.binomial(present, p_active)) if present else 0
+        inactive_present = present - active
+        asleep = (
+            int(ctx.rng.binomial(inactive_present, p_asleep))
+            if inactive_present
+            else 0
+        )
 
         n_present.append(present)
         n_active.append(active)
+        n_asleep.append(asleep)
         activity.append(_activity_label(present, active))
 
     return pd.DataFrame(
-        {"n_present": n_present, "n_active": n_active, "activity": activity},
+        {
+            "n_present": n_present,
+            "n_active": n_active,
+            "n_asleep": n_asleep,
+            "activity": activity,
+        },
         index=ctx.index,
     )
 
@@ -96,7 +135,8 @@ def markov_chain(ctx: OccupancyGenerationContext) -> pd.DataFrame:
     timesteps instead of independently re-randomizing every hour:
 
         row(state=i, hour=h) = persistence * onehot(i)
-                              + (1 - persistence) * Binomial_pmf(size, p_active[h])
+                              + (1 - persistence)
+                                * Binomial_pmf(size, p_active[h])
 
     ``persistence`` (default 0.7) is read from ``ctx.params``. Present-but-
     inactive occupants are layered on top from the gap between
@@ -112,12 +152,14 @@ def markov_chain(ctx: OccupancyGenerationContext) -> pd.DataFrame:
     hour0, weekend0 = first.hour, 1 if first.weekday() >= 5 else 0
     current_state = int(
         ctx.rng.choice(
-            states, p=_binomial_pmf(size, ctx.active_probabilities[hour0][weekend0])
+            states,
+            p=_binomial_pmf(size, ctx.active_probabilities[hour0][weekend0]),
         )
     )
 
     n_present: list[int] = []
     n_active: list[int] = []
+    n_asleep: list[int] = []
     activity: list[str] = []
 
     for ts in ctx.index:
@@ -125,10 +167,12 @@ def markov_chain(ctx: OccupancyGenerationContext) -> pd.DataFrame:
         weekend_index = 1 if ts.weekday() >= 5 else 0
         p_active = ctx.active_probabilities[hour][weekend_index]
         p_home = ctx.home_probabilities[hour][weekend_index]
+        p_asleep = ctx.asleep_probabilities[hour][weekend_index]
 
         target_pmf = _binomial_pmf(size, p_active)
         row_probs = (
-            persistence * identity[current_state] + (1 - persistence) * target_pmf
+            persistence * identity[current_state]
+            + (1 - persistence) * target_pmf
         )
         row_probs = row_probs / row_probs.sum()
         current_state = int(ctx.rng.choice(states, p=row_probs))
@@ -146,13 +190,24 @@ def markov_chain(ctx: OccupancyGenerationContext) -> pd.DataFrame:
             else 0
         )
         present = active + extra_present
+        asleep = (
+            int(ctx.rng.binomial(extra_present, p_asleep))
+            if extra_present
+            else 0
+        )
 
         n_present.append(present)
         n_active.append(active)
+        n_asleep.append(asleep)
         activity.append(_activity_label(present, active))
 
     return pd.DataFrame(
-        {"n_present": n_present, "n_active": n_active, "activity": activity},
+        {
+            "n_present": n_present,
+            "n_active": n_active,
+            "n_asleep": n_asleep,
+            "activity": activity,
+        },
         index=ctx.index,
     )
 
@@ -203,13 +258,95 @@ def fixed_schedule(ctx: OccupancyGenerationContext) -> pd.DataFrame:
         ctx.rng.binomial(n_present, active_fraction),
         0,
     )
+    inactive_present = n_present - n_active
+    weekend_index = is_weekend.astype(int)
+    p_asleep = ctx.asleep_probabilities[hours, weekend_index]
+    n_asleep = np.where(
+        inactive_present > 0,
+        ctx.rng.binomial(inactive_present, p_asleep),
+        0,
+    )
     activity = [
         _activity_label(int(p), int(a))
         for p, a in zip(n_present, n_active, strict=True)
     ]
 
     return pd.DataFrame(
-        {"n_present": n_present, "n_active": n_active, "activity": activity},
+        {
+            "n_present": n_present,
+            "n_active": n_active,
+            "n_asleep": n_asleep,
+            "activity": activity,
+        },
+        index=ctx.index,
+    )
+
+
+def hourly_occupancy_curve(ctx: OccupancyGenerationContext) -> pd.DataFrame:
+    """Occupancy driven by an explicit 24-hour occupancy-fraction table
+    (weekday/weekend), rather than a single open/close window + flat peak
+    like :func:`fixed_schedule`. Matches the shape of published reference
+    schedules (e.g. DOE/ASHRAE 90.1 prototype-building
+    ``Schedule:Compact`` fractional schedules) for building types whose
+    day-shape a single rectangle can't represent — a hotel's near-constant
+    overnight guest presence plus checkout/check-in peaks, for instance.
+
+    ``ctx.params`` keys: ``occupancy_fraction`` (required — 24 rows of
+    ``[weekday, weekend]`` fractions of ``size``, same shape convention as
+    ``home_probabilities``), ``active_fraction`` (default 0.5),
+    ``closed_months`` (as in :func:`fixed_schedule`), ``noise`` (stdev of
+    additive jitter, default 0.05). ``ctx.asleep_probabilities`` feeds
+    ``n_asleep`` exactly as in the other generators.
+    """
+    params = ctx.params
+    if "occupancy_fraction" not in params:
+        raise ValueError(
+            "hourly_occupancy_curve requires 'occupancy_fraction' "
+            "(24 rows of [weekday, weekend] fractions) in generator_params"
+        )
+    curve = np.asarray(params["occupancy_fraction"], dtype=float)
+    if curve.shape != (24, 2):
+        raise ValueError("occupancy_fraction must have shape (24, 2)")
+    active_fraction = float(params.get("active_fraction", 0.5))
+    noise = float(params.get("noise", 0.05))
+    closed_months = set(params.get("closed_months", []))
+
+    hours = ctx.index.hour.to_numpy()
+    is_weekend = ctx.index.weekday >= 5
+    weekend_index = is_weekend.astype(int)
+    base_fraction = curve[hours, weekend_index]
+    if closed_months:
+        closed = np.isin(ctx.index.month.to_numpy(), list(closed_months))
+        base_fraction = np.where(closed, 0.0, base_fraction)
+
+    jitter = ctx.rng.normal(loc=0.0, scale=noise, size=len(hours))
+    occupancy_fraction = np.clip(base_fraction + jitter, 0.0, 1.0)
+
+    n_present = ctx.rng.binomial(ctx.size, occupancy_fraction)
+    n_active = np.where(
+        n_present > 0,
+        ctx.rng.binomial(n_present, active_fraction),
+        0,
+    )
+    inactive_present = n_present - n_active
+    p_asleep = ctx.asleep_probabilities[hours, weekend_index]
+    n_asleep = np.where(
+        inactive_present > 0,
+        ctx.rng.binomial(inactive_present, p_asleep),
+        0,
+    )
+    activity = [
+        _activity_label(int(p), int(a))
+        for p, a in zip(n_present, n_active, strict=True)
+    ]
+
+    return pd.DataFrame(
+        {
+            "n_present": n_present,
+            "n_active": n_active,
+            "n_asleep": n_asleep,
+            "activity": activity,
+        },
         index=ctx.index,
     )
 
@@ -218,6 +355,7 @@ _GENERATORS: dict[str, GeneratorFn] = {
     "binomial_independent": binomial_independent,
     "markov_chain": markov_chain,
     "fixed_schedule": fixed_schedule,
+    "hourly_occupancy_curve": hourly_occupancy_curve,
 }
 
 

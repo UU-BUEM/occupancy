@@ -11,6 +11,7 @@ from occupancy.core.equipment import (
     normalize_equipment_table,
 )
 from occupancy.core.loader import load_json_resource
+from occupancy.core.result import OccupancyResult
 from occupancy.households.archetypes import get_archetype
 from occupancy.households.household_profile import HouseholdProfile
 
@@ -31,8 +32,19 @@ _LEGACY_FLAG_TO_EQUIPMENT: dict[str, list[str]] = {
         "refrigerator",
         "upright_freezer",
     ],
-    "has_cooking": ["hob", "oven", "microwave", "kettle", "small_cooking_group"],
-    "has_laundry": ["dish_washer", "tumble_dryer", "washing_machine", "washer_dryer"],
+    "has_cooking": [
+        "hob",
+        "oven",
+        "microwave",
+        "kettle",
+        "small_cooking_group",
+    ],
+    "has_laundry": [
+        "dish_washer",
+        "tumble_dryer",
+        "washing_machine",
+        "washer_dryer",
+    ],
     "has_cleaning": ["vacuum"],
     "has_ironing": ["iron"],
     "has_tv": ["tv_1", "tv_2", "tv_3", "vcr_dvd", "tv_receiver_box"],
@@ -82,7 +94,8 @@ def _apply_overrides(
 class ElectricityConsumptionProfile:
     """Hourly household electricity demand derived from occupancy states.
 
-    Iterates a config-driven list of :class:`~occupancy.core.equipment.EquipmentSpec`
+    Iterates a config-driven list of
+    :class:`~occupancy.core.equipment.EquipmentSpec`
     (loaded from ``households/data/equipment.json``, with any per-archetype
     ``equipment_overrides`` applied) instead of one bespoke method per
     appliance. The ``has_*`` flags are kept as a compatibility shim for
@@ -175,3 +188,23 @@ class ElectricityConsumptionProfile:
         if self._profile is None:
             return self.generate()
         return self._profile
+
+    def to_result(self) -> OccupancyResult:
+        """Like :meth:`HouseholdProfile.to_result`/
+        :meth:`ServiceBuildingProfile.to_result`, but for the
+        equipment-augmented profile (``total_power_kwh`` included) --
+        the household-side counterpart needed for e.g.
+        :func:`occupancy.core.buem_adapter.to_buem_profiles`, since a bare
+        ``HouseholdProfile.to_result()`` has no equipment column.
+        """
+        occ = self.occupancy_profile
+        archetype_spec = get_archetype(occ.archetype)
+        return OccupancyResult(
+            profile=self.get_profile(),
+            year=occ.year,
+            num_persons=occ.num_persons,
+            building_type="household",
+            region=occ.region,
+            heat_gain_present_kw=archetype_spec.heat_gain_present_kw,
+            heat_gain_active_kw=archetype_spec.heat_gain_active_kw,
+        )

@@ -46,6 +46,29 @@ Do not re-raise. "BY-DESIGN" are deliberate choices.
   Deep import paths removed as a breaking change (package is Alpha);
   `CHANGELOG.md` documents old→new paths.
 
+## buem-alignment round (2026-07-28) — fixed/settled
+- **Real "asleep" occupancy state added** — `occ_sleeping` for buem
+  (`core/buem_adapter.py`) used to be a fixed 23:00-07:00 heuristic since
+  the engine tracked no sleep state at all. Now `core/occupancy_engine.py`
+  has a fourth per-hour signal, `asleep_probabilities` (`(24, 2)`, same
+  shape as `home_probabilities`/`active_probabilities`), conditional on
+  being present-but-inactive; all three generators
+  (`binomial_independent`, `markov_chain`, `fixed_schedule`) draw and emit
+  a real `n_asleep` column from it. All 5 household archetypes define
+  illustrative curves (see `open.md` for the calibration caveat). Service
+  buildings never set `asleep_probabilities`, so `n_asleep` stays `0` for
+  them without special-casing `fixed_schedule` — the shared engine emits
+  the same schema either way. The old fixed-window heuristic is retained
+  in `to_buem_profiles()` only as a fallback for profiles/DataFrames built
+  before this column existed.
+- **Per-archetype `heat_gain_present_kw`/`heat_gain_active_kw`** —
+  `core/buem_adapter.py`'s `Q_ig` used one global constant pair for every
+  household and building type; now each archetype JSON carries its own
+  pair (`ArchetypeSpec`), read by `HouseholdProfile.to_result()`/
+  `ElectricityConsumptionProfile.to_result()` onto `OccupancyResult`, with
+  the adapter's global constants demoted to a last-resort fallback. See
+  `services/resolved.md` for the building-type side of the same change.
+
 ## BY-DESIGN
 - `markov_chain`'s transition-probability data is **not** copied from
   pyCREST/richardsonpy/tsorb (GPLv3), StROBe (unlicensed), or the CREST

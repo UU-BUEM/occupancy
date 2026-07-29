@@ -13,8 +13,16 @@ def test_generic_archetype_shape_and_columns() -> None:
     profile = HouseholdProfile(num_persons=3, year=2024, seed=1).get_profile()
 
     assert len(profile) in (8784, 8760)
-    assert list(profile.columns) == ["n_present", "n_active", "activity"]
+    assert list(profile.columns) == [
+        "n_present",
+        "n_active",
+        "n_asleep",
+        "activity",
+    ]
     assert (profile["n_active"] <= profile["n_present"]).all()
+    assert (
+        profile["n_asleep"] <= profile["n_present"] - profile["n_active"]
+    ).all()
 
 
 def test_all_archetypes_are_registered_and_generate() -> None:
@@ -28,6 +36,10 @@ def test_all_archetypes_are_registered_and_generate() -> None:
     assert expected <= HOUSEHOLD_ARCHETYPES.keys()
 
     for name, spec in HOUSEHOLD_ARCHETYPES.items():
+        assert spec.asleep_probabilities.shape == (24, 2)
+        assert spec.heat_gain_present_kw > 0
+        assert spec.heat_gain_active_kw > spec.heat_gain_present_kw
+
         profile = HouseholdProfile(
             num_persons=spec.num_persons_default,
             year=2025,
@@ -36,6 +48,12 @@ def test_all_archetypes_are_registered_and_generate() -> None:
         ).get_profile()
         assert (profile["n_active"] <= profile["n_present"]).all()
         assert (profile["n_present"] <= spec.num_persons_default).all()
+        assert (
+            profile["n_asleep"] <= profile["n_present"] - profile["n_active"]
+        ).all()
+        # every archetype's asleep_probabilities is nonzero somewhere ->
+        # some hour across a full year should show a sleeping occupant.
+        assert (profile["n_asleep"] > 0).any()
 
 
 def test_unknown_archetype_raises() -> None:
@@ -56,6 +74,23 @@ def test_electricity_profile_has_total_power() -> None:
 
     assert "total_power_kwh" in profile.columns
     assert (profile["total_power_kwh"] >= 0).all()
+
+
+def test_to_result_carries_archetype_heat_gain() -> None:
+    household = HouseholdProfile(
+        num_persons=1, year=2025, archetype="retired_single", seed=1
+    )
+    bare_result = household.to_result()
+    spec = get_archetype("retired_single")
+    assert bare_result.heat_gain_present_kw == spec.heat_gain_present_kw
+    assert bare_result.heat_gain_active_kw == spec.heat_gain_active_kw
+
+    elec_result = ElectricityConsumptionProfile(
+        occupancy_profile=household, seed=1
+    ).to_result()
+    assert elec_result.heat_gain_present_kw == spec.heat_gain_present_kw
+    assert elec_result.heat_gain_active_kw == spec.heat_gain_active_kw
+    assert "total_power_kwh" in elec_result.profile.columns
 
 
 def test_equipment_table_is_config_driven_and_complete() -> None:
@@ -99,7 +134,12 @@ def test_has_flags_disable_down_to_cold_appliances_only() -> None:
     # flat_always_on, so the total must be constant across every hour and
     # bounded by the sum of every cold appliance's rated power (ownership is
     # stochastic per household, so we can't assert an exact figure).
-    cold_items = ["chest_freezer", "fridge_freezer", "refrigerator", "upright_freezer"]
+    cold_items = [
+        "chest_freezer",
+        "fridge_freezer",
+        "refrigerator",
+        "upright_freezer",
+    ]
     equipment = electricity.get_equipment_table()
     max_possible = sum(equipment[name].rated_power_kw for name in cold_items)
 
@@ -141,5 +181,7 @@ def test_family_with_children_equipment_overrides_applied() -> None:
 
 def test_top_level_backward_compat_aliases() -> None:
     assert occupancy.OccupancyProfile is HouseholdProfile
-    profile = occupancy.OccupancyProfile(num_persons=2, year=2025, seed=1).get_profile()
+    profile = occupancy.OccupancyProfile(
+        num_persons=2, year=2025, seed=1
+    ).get_profile()
     assert "n_present" in profile.columns

@@ -7,8 +7,19 @@ a side effect of import. Add a new type by adding a
 here that calls ``load_building_type("<type>")``.
 """
 
-from occupancy.services_buildings import office, restaurant, school, supermarket
-from occupancy.services_buildings.building_profile import ServiceBuildingProfile
+from occupancy.services_buildings import (
+    bakery,
+    clinic,
+    hotel,
+    office,
+    restaurant,
+    school,
+    supermarket,
+    warehouse,
+)
+from occupancy.services_buildings.building_profile import (
+    ServiceBuildingProfile,
+)
 from occupancy.services_buildings.building_types import (
     SERVICE_BUILDING_TYPES,
     ServiceBuildingTypeSpec,
@@ -20,10 +31,14 @@ __all__ = [
     "SERVICE_BUILDING_TYPES",
     "ServiceBuildingProfile",
     "ServiceBuildingTypeSpec",
+    "bakery",
+    "clinic",
     "get_building_type",
+    "hotel",
     "office",
     "register_building_type",
     "restaurant",
     "school",
     "supermarket",
+    "warehouse",
 ]

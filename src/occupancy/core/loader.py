@@ -1,4 +1,5 @@
-"""Shared package-data JSON loading, used by households/ and services_buildings/.
+"""Shared package-data JSON loading, used by households/ and
+services_buildings/.
 
 Replaces the old fragile ``_defaults.py`` path traversal against a root
 ``configs/`` directory: every subpackage now loads its own bundled JSON via
@@ -22,7 +23,8 @@ def load_json_resource(package: str, relative_path: str) -> dict[str, Any]:
 
 
 def iter_json_resources(package: str, relative_dir: str) -> list[str]:
-    """List the ``*.json`` filenames bundled under ``package``/``relative_dir``."""
+    """List the ``*.json`` filenames bundled under
+    ``package``/``relative_dir``."""
     directory = files(package).joinpath(relative_dir)
     return sorted(
         entry.name

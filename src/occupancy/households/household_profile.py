@@ -6,7 +6,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from occupancy.core.occupancy_engine import OccupancyGenerationContext, get_generator
+from occupancy.core.occupancy_engine import (
+    OccupancyGenerationContext,
+    get_generator,
+)
 from occupancy.core.result import OccupancyResult
 from occupancy.households.archetypes import get_archetype
 
@@ -16,7 +19,8 @@ class HouseholdProfile:
     """Stochastic hourly occupancy model for a single household.
 
     ``archetype`` selects the default occupancy-probability data and
-    generator strategy from :data:`occupancy.households.archetypes.HOUSEHOLD_ARCHETYPES`
+    generator strategy from
+    :data:`occupancy.households.archetypes.HOUSEHOLD_ARCHETYPES`
     (default ``"generic"``, the pre-restructuring behavior). Any of
     ``home_probabilities``/``active_probabilities``/``generator``/
     ``generator_params`` can be overridden explicitly, same as before.
@@ -29,6 +33,7 @@ class HouseholdProfile:
     region: str = "NL"
     home_probabilities: np.ndarray | None = None
     active_probabilities: np.ndarray | None = None
+    asleep_probabilities: np.ndarray | None = None
     generator: str | None = None
     generator_params: dict[str, Any] | None = None
 
@@ -38,7 +43,8 @@ class HouseholdProfile:
         if self.year < 1900:
             raise ValueError("year must be >= 1900")
 
-        archetype_spec = get_archetype(self.archetype)
+        self._archetype_spec = get_archetype(self.archetype)
+        archetype_spec = self._archetype_spec
 
         home = (
             self.home_probabilities
@@ -50,12 +56,20 @@ class HouseholdProfile:
             if self.active_probabilities is not None
             else archetype_spec.active_probabilities
         )
+        asleep = (
+            self.asleep_probabilities
+            if self.asleep_probabilities is not None
+            else archetype_spec.asleep_probabilities
+        )
         self.home_probabilities = np.asarray(home, dtype=float)
         self.active_probabilities = np.asarray(active, dtype=float)
+        self.asleep_probabilities = np.asarray(asleep, dtype=float)
         if self.home_probabilities.shape != (24, 2):
             raise ValueError("home_probabilities must have shape (24, 2)")
         if self.active_probabilities.shape != (24, 2):
             raise ValueError("active_probabilities must have shape (24, 2)")
+        if self.asleep_probabilities.shape != (24, 2):
+            raise ValueError("asleep_probabilities must have shape (24, 2)")
 
         self._generator_name = self.generator or archetype_spec.generator
         self._generator_params = (
@@ -76,12 +90,14 @@ class HouseholdProfile:
         """Generate and cache the yearly occupancy profile."""
         assert self.home_probabilities is not None
         assert self.active_probabilities is not None
+        assert self.asleep_probabilities is not None
         rng = self._rng if seed is None else np.random.default_rng(seed)
         ctx = OccupancyGenerationContext(
             size=self.num_persons,
             index=self._index,
             home_probabilities=self.home_probabilities,
             active_probabilities=self.active_probabilities,
+            asleep_probabilities=self.asleep_probabilities,
             rng=rng,
             params=self._generator_params or {},
         )
@@ -102,4 +118,6 @@ class HouseholdProfile:
             num_persons=self.num_persons,
             building_type="household",
             region=self.region,
+            heat_gain_present_kw=self._archetype_spec.heat_gain_present_kw,
+            heat_gain_active_kw=self._archetype_spec.heat_gain_active_kw,
         )

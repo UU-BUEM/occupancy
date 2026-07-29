@@ -1,0 +1,18 @@
+{
+  "_comment": "Occupant density informed by ASHRAE 62.1 Table 6-1 (warehouse ~2 people/1000 ft^2 -- sparse, bulk storage floor is mostly unoccupied) and DOE/NREL Commercial Reference Building Models (Deru et al. 2011) non-refrigerated Warehouse prototype (~52,000 ft^2, 1 floor, distinct office vs. bulk-storage schedule sets -- this repo models one blended occupant count, not separate zones). Illustrative, not survey-calibrated.",
+  "id": "warehouse",
+  "description": "Warehouse / bulk storage with a small admin office. Weekday shift, closed weekends.",
+  "region": "NL",
+  "capacity_default": 15,
+  "generator": "fixed_schedule",
+  "generator_params": {
+    "open_hour": 7,
+    "close_hour": 18,
+    "closed_weekends": true,
+    "peak_occupancy_fraction": 0.8,
+    "active_fraction": 0.8,
+    "noise": 0.08
+  },
+  "heat_gain_present_kw": 0.100,
+  "heat_gain_active_kw": 0.200
+}

@@ -1,7 +1,11 @@
 """Occupancy modeling package for UU-BUEM: households and service buildings."""
 
+from occupancy.core.buem_adapter import to_buem_profiles
 from occupancy.core.result import OccupancyResult
-from occupancy.households import ElectricityConsumptionProfile, HouseholdProfile
+from occupancy.households import (
+    ElectricityConsumptionProfile,
+    HouseholdProfile,
+)
 from occupancy.services_buildings import ServiceBuildingProfile
 
 # Back-compat alias: the pre-restructuring public API exposed a single
@@ -20,4 +24,5 @@ __all__ = [
     "OccupancyResult",
     "ServiceBuildingProfile",
     "__version__",
+    "to_buem_profiles",
 ]

@@ -1,5 +1,8 @@
 from occupancy.config import ScenarioConfig, load_scenario_config
-from occupancy.households import ElectricityConsumptionProfile, HouseholdProfile
+from occupancy.households import (
+    ElectricityConsumptionProfile,
+    HouseholdProfile,
+)
 
 
 def test_default_scenario_config_round_trips() -> None:

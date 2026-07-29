@@ -13,6 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
+
 from occupancy.core.equipment import EquipmentSpec, normalize_equipment_table
 from occupancy.core.loader import load_json_resource
 
@@ -30,6 +32,20 @@ class ServiceBuildingTypeSpec:
     generator: str
     generator_params: dict[str, Any]
     equipment: dict[str, EquipmentSpec] = field(default_factory=dict)
+    # Heat gain per occupant [kW], building-total (see
+    # `core/buem_adapter.py` module docstring for units/rationale/sources).
+    # Defaults match that module's own fallback constants.
+    heat_gain_present_kw: float = 0.100
+    heat_gain_active_kw: float = 0.150
+    # Conditional on being present-but-inactive: probability of being
+    # asleep. Same mechanism as households (`ArchetypeSpec`) -- most
+    # service-building types leave this all-zero (no overnight occupants),
+    # but a type with genuine overnight presence (e.g. a hotel) sets real
+    # data and gets real `n_asleep` output through
+    # `core/occupancy_engine.py`'s generators.
+    asleep_probabilities: np.ndarray = field(
+        default_factory=lambda: np.zeros((24, 2))
+    )
 
 
 SERVICE_BUILDING_TYPES: dict[str, ServiceBuildingTypeSpec] = {}
@@ -54,7 +70,10 @@ def get_building_type(name: str) -> ServiceBuildingTypeSpec:
 def load_building_type(type_id: str) -> ServiceBuildingTypeSpec:
     """Load ``data/<type_id>/{schedule,equipment}.json`` and register it."""
     schedule = load_json_resource(_PACKAGE, f"data/{type_id}/schedule.json")
-    equipment_data = load_json_resource(_PACKAGE, f"data/{type_id}/equipment.json")
+    equipment_data = load_json_resource(
+        _PACKAGE, f"data/{type_id}/equipment.json"
+    )
+    asleep = schedule.get("asleep_probabilities")
     spec = ServiceBuildingTypeSpec(
         id=schedule["id"],
         description=schedule.get("description", ""),
@@ -63,6 +82,15 @@ def load_building_type(type_id: str) -> ServiceBuildingTypeSpec:
         generator=schedule.get("generator", "fixed_schedule"),
         generator_params=schedule.get("generator_params", {}),
         equipment=normalize_equipment_table(equipment_data),
+        heat_gain_present_kw=float(
+            schedule.get("heat_gain_present_kw", 0.100)
+        ),
+        heat_gain_active_kw=float(schedule.get("heat_gain_active_kw", 0.150)),
+        asleep_probabilities=(
+            np.asarray(asleep, dtype=float)
+            if asleep is not None
+            else np.zeros((24, 2))
+        ),
     )
     register_building_type(spec)
     return spec

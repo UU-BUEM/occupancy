@@ -4,7 +4,10 @@ import argparse
 from pathlib import Path
 
 from occupancy.config import ScenarioConfig, load_scenario_config
-from occupancy.households import ElectricityConsumptionProfile, HouseholdProfile
+from occupancy.households import (
+    ElectricityConsumptionProfile,
+    HouseholdProfile,
+)
 from occupancy.services_buildings import ServiceBuildingProfile
 from occupancy.services_buildings.building_types import SERVICE_BUILDING_TYPES
 
@@ -87,12 +90,16 @@ def main() -> int:
     )
     output = args.output if args.output is not None else config.output
     building_type = (
-        args.building_type if args.building_type is not None else config.building_type
+        args.building_type
+        if args.building_type is not None
+        else config.building_type
     )
     region = args.region if args.region is not None else config.region
 
     if building_type == "household":
-        archetype = args.archetype if args.archetype is not None else config.archetype
+        archetype = (
+            args.archetype if args.archetype is not None else config.archetype
+        )
         household = HouseholdProfile(
             num_persons=persons,
             year=year,

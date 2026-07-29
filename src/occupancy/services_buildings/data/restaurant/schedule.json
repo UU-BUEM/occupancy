@@ -14,5 +14,7 @@
     "peak_occupancy_fraction": 0.5,
     "active_fraction": 0.95,
     "noise": 0.12
-  }
+  },
+  "heat_gain_present_kw": 0.100,
+  "heat_gain_active_kw": 0.170
 }

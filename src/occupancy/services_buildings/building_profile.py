@@ -7,7 +7,10 @@ import numpy as np
 import pandas as pd
 
 from occupancy.core.equipment import generate_equipment_power
-from occupancy.core.occupancy_engine import OccupancyGenerationContext, get_generator
+from occupancy.core.occupancy_engine import (
+    OccupancyGenerationContext,
+    get_generator,
+)
 from occupancy.core.result import OccupancyResult
 from occupancy.services_buildings.building_types import get_building_type
 
@@ -68,6 +71,7 @@ class ServiceBuildingProfile:
             size=self.capacity,
             index=self._index,
             rng=rng,
+            asleep_probabilities=self._type_spec.asleep_probabilities,
             params=self._generator_params or {},
         )
         strategy = get_generator(self._generator_name)
@@ -75,9 +79,13 @@ class ServiceBuildingProfile:
 
         if self.include_equipment:
             specs = [
-                spec for spec in self._type_spec.equipment.values() if spec.enabled
+                spec
+                for spec in self._type_spec.equipment.values()
+                if spec.enabled
             ]
-            profile["total_power_kwh"] = generate_equipment_power(specs, profile, rng)
+            profile["total_power_kwh"] = generate_equipment_power(
+                specs, profile, rng
+            )
 
         self._profile = profile
         return profile
@@ -96,4 +104,6 @@ class ServiceBuildingProfile:
             num_persons=self.capacity or 0,
             building_type=self.building_type,
             region=self.region,
+            heat_gain_present_kw=self._type_spec.heat_gain_present_kw,
+            heat_gain_active_kw=self._type_spec.heat_gain_active_kw,
         )

@@ -4,6 +4,88 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-07-29
+
+### Added
+
+- `occupancy.core.buem_adapter.to_buem_profiles()` (also exported as
+  `occupancy.to_buem_profiles`): converts an `OccupancyResult` into the four
+  `pd.Series` buem's `ModelBUEM` requires in `cfg` — `Q_ig`, `elecLoad`,
+  `occ_nothome`, `occ_sleeping` — confirmed against
+  `buem.thermal.model_buem.ModelBUEM._addPara`/`_addConstraints_sequential`,
+  which raise `ValueError` if any of the four is missing. `elecLoad` reuses
+  the existing `total_power_kwh` equipment output; `occ_nothome` is
+  `1 - n_present / num_persons`.
+- `Q_ig` (internal gains, kW, building-total) is derived from
+  `n_present`/`n_active` using a per-occupant heat-gain split
+  (present-but-inactive vs. active), sourced from a new
+  `heat_gain_present_kw`/`heat_gain_active_kw` pair on each household
+  archetype and service-building type (ISO 7730 / ASHRAE Fundamentals
+  Ch. 18-informed, illustrative, not survey-calibrated) — e.g. school
+  (0.085/0.120 kW) and supermarket (0.100/0.180 kW) now differ, rather than
+  every building sharing one hardcoded constant. `to_buem_profiles()` falls
+  back to its own module constants only when a result carries no per-type
+  value.
+- `occ_sleeping` is now real generator output, not a heuristic:
+  `core/occupancy_engine.py`'s three generators (`binomial_independent`,
+  `markov_chain`, `fixed_schedule`) all emit a new `n_asleep` column, drawn
+  from the present-but-inactive occupant share via a new
+  `asleep_probabilities` `(24, 2)` array (conditional probability of being
+  asleep rather than just quietly present-inactive). All 5 household
+  archetypes now define `asleep_probabilities` (illustrative, hand-authored
+  curves peaking overnight, shaped per archetype — e.g. `student_shared`
+  shifted several hours later, `retired_single` with a small midday-nap
+  allowance). Service buildings never set it, so `n_asleep` is always `0`
+  for the 4 current building types without special-casing
+  `fixed_schedule` — households and service buildings share one output
+  schema either way. `to_buem_profiles()` uses `n_asleep` directly when
+  present; the previous 23:00–07:00 window heuristic is now only a fallback
+  for profiles/DataFrames that predate this column.
+- `ElectricityConsumptionProfile.to_result()` — previously only
+  `HouseholdProfile.to_result()`/`ServiceBuildingProfile.to_result()`
+  existed, and a bare `HouseholdProfile.to_result()` has no
+  `total_power_kwh` column (equipment lives in the separate
+  `ElectricityConsumptionProfile` wrapper for households only). This closes
+  that asymmetry so both household and service-building results reach
+  `to_buem_profiles()` the same way.
+- New `hourly_occupancy_curve` occupancy-generation strategy
+  (`core/occupancy_engine.py`): an explicit 24-hour occupancy-fraction
+  table (weekday/weekend), for building types whose day-shape a single
+  open/close window + flat peak (`fixed_schedule`) can't represent — a
+  hotel's near-continuous overnight guest presence plus checkout/check-in
+  peaks, for instance. Shaped like published DOE/ASHRAE 90.1
+  prototype-building `Schedule:Compact` fractional schedules.
+  `ServiceBuildingTypeSpec`/`ServiceBuildingProfile` also gain
+  `asleep_probabilities` (same field, same mechanism households already
+  had) so a service-building type can have genuine sleeping occupants;
+  `to_buem_profiles()`'s `occ_sleeping` no longer special-cases
+  `building_type == "household"` — it uses real `n_asleep` output for any
+  building type that has it.
+- Four new service-building types, informed by DOE/NREL Commercial
+  Reference Building Models (Deru et al. 2011), ASHRAE 90.1 Table 9.5.1,
+  and ASHRAE 62.1 Table 6-1 (occupant densities/LPD — see each type's
+  `schedule.json` `_comment` for exact citations; still illustrative/
+  hand-interpolated, not a literal reproduction of a published schedule):
+  `hotel` (uses `hourly_occupancy_curve`, the first building type with
+  genuine `asleep_probabilities`), `bakery` (small retail, early opening),
+  `warehouse` (sparse occupant density, weekday-only), `clinic` (outpatient
+  healthcare, weekday + partial-Saturday hours — distinct from a 24/7
+  hospital, which isn't modeled). 8 service-building types total.
+
+### Breaking
+
+- Occupancy profile DataFrames (both households and service buildings) gain
+  a new `n_asleep` column between `n_active` and `activity` —
+  `list(profile.columns)` changes from `["n_present", "n_active",
+  "activity", ...]` to `["n_present", "n_active", "n_asleep", "activity",
+  ...]`. `OccupancyGenerationContext` gains an `asleep_probabilities` field
+  (default all-zero, so existing callers that don't pass it are
+  unaffected). `ArchetypeSpec`/`ServiceBuildingTypeSpec` gain
+  `asleep_probabilities`/`heat_gain_present_kw`/`heat_gain_active_kw`
+  fields (all with defaults, so existing archetype/building-type JSON
+  without them still loads). `OccupancyResult` gains
+  `heat_gain_present_kw`/`heat_gain_active_kw` (both `None`-default).
+
 ## [2.0.0] - 2026-07-24
 
 ### Added (household equipment expansion)

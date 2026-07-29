@@ -31,16 +31,36 @@ class ArchetypeSpec:
     generator_params: dict[str, Any]
     home_probabilities: np.ndarray
     active_probabilities: np.ndarray
-    equipment_overrides: dict[str, dict[str, np.ndarray]] = field(default_factory=dict)
+    equipment_overrides: dict[str, dict[str, np.ndarray]] = field(
+        default_factory=dict
+    )
+    # Conditional on being present-but-inactive: probability of being asleep
+    # rather than just quietly awake. Feeds `n_asleep` in
+    # `core/occupancy_engine.py`'s generator output, in turn buem's
+    # `occ_sleeping` via `core/buem_adapter.py`. Defaults to all-zero (no
+    # sleep signal) for any archetype JSON that doesn't define it.
+    asleep_probabilities: np.ndarray = field(
+        default_factory=lambda: np.zeros((24, 2))
+    )
+    # Heat gain per occupant [kW], building-total (see
+    # `core/buem_adapter.py` module docstring for units/rationale/sources).
+    # Defaults match that module's own fallback constants.
+    heat_gain_present_kw: float = 0.100
+    heat_gain_active_kw: float = 0.150
 
 
 def _parse_archetype(data: dict[str, Any]) -> ArchetypeSpec:
     overrides: dict[str, dict[str, np.ndarray]] = {}
     for name, override in data.get("equipment_overrides", {}).items():
         overrides[name] = {
-            "weekday": np.asarray(override.get("weekday", [1.0] * 24), dtype=float),
-            "weekend": np.asarray(override.get("weekend", [1.0] * 24), dtype=float),
+            "weekday": np.asarray(
+                override.get("weekday", [1.0] * 24), dtype=float
+            ),
+            "weekend": np.asarray(
+                override.get("weekend", [1.0] * 24), dtype=float
+            ),
         }
+    asleep = data.get("asleep_probabilities")
     return ArchetypeSpec(
         id=data["id"],
         description=data.get("description", ""),
@@ -49,8 +69,17 @@ def _parse_archetype(data: dict[str, Any]) -> ArchetypeSpec:
         generator=data.get("generator", "binomial_independent"),
         generator_params=data.get("generator_params", {}),
         home_probabilities=np.asarray(data["home_probabilities"], dtype=float),
-        active_probabilities=np.asarray(data["active_probabilities"], dtype=float),
+        active_probabilities=np.asarray(
+            data["active_probabilities"], dtype=float
+        ),
         equipment_overrides=overrides,
+        asleep_probabilities=(
+            np.asarray(asleep, dtype=float)
+            if asleep is not None
+            else np.zeros((24, 2))
+        ),
+        heat_gain_present_kw=float(data.get("heat_gain_present_kw", 0.100)),
+        heat_gain_active_kw=float(data.get("heat_gain_active_kw", 0.150)),
     )
 
 

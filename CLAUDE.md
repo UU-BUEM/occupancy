@@ -29,6 +29,7 @@ occupancy/
 ├── src/occupancy/
 │   ├── __init__.py          # public API: HouseholdProfile, ServiceBuildingProfile,
 │   │                        #   ElectricityConsumptionProfile, OccupancyResult,
+│   │                        #   to_buem_profiles,
 │   │                        #   + OccupancyProfile = HouseholdProfile (back-compat alias)
 │   ├── cli.py                 # occupancy CLI: --building-type/--archetype/--region/...
 │   ├── config/                 # CLI-facing ScenarioConfig (JSON scenario files)
@@ -36,7 +37,8 @@ occupancy/
 │   │   ├── occupancy_engine.py   # generator-strategy registry (see below)
 │   │   ├── equipment.py          # EquipmentSpec + trigger-strategy registry
 │   │   ├── loader.py             # importlib.resources JSON loading helpers
-│   │   └── result.py             # OccupancyResult (shared output contract)
+│   │   ├── result.py             # OccupancyResult (shared output contract)
+│   │   └── buem_adapter.py       # OccupancyResult -> buem's Q_ig/elecLoad/occ_nothome/occ_sleeping
 │   ├── households/             # base __init__.py registers HOUSEHOLD_ARCHETYPES
 │   │   ├── archetypes.py         # ArchetypeSpec + registry, loads data/archetypes/*.json
 │   │   ├── household_profile.py  # HouseholdProfile
@@ -45,7 +47,8 @@ occupancy/
 │   ├── services_buildings/     # base __init__.py registers SERVICE_BUILDING_TYPES
 │   │   ├── building_types.py     # ServiceBuildingTypeSpec + registry
 │   │   ├── building_profile.py   # ServiceBuildingProfile
-│   │   ├── {supermarket,office,restaurant,school}.py   # one thin file per type
+│   │   ├── {supermarket,office,restaurant,school,hotel,bakery,warehouse,clinic}.py
+│   │   │                        #   one thin file per type (8 today)
 │   │   └── data/<type>/{schedule.json, equipment.json}
 │   └── visualization/
 ```
@@ -84,7 +87,23 @@ config-driven consumers of one shared engine, not parallel implementations.
   `core.occupancy_engine.GeneratorFn` and register it with
   `register_generator`. Currently registered: `binomial_independent`
   (default, original algorithm), `markov_chain` (persistence-parameterized,
-  used by `working_couple`), `fixed_schedule` (service buildings).
+  used by `working_couple`), `fixed_schedule` (single open/close window +
+  flat peak — most service buildings), `hourly_occupancy_curve` (explicit
+  24-hour occupancy-fraction table, weekday/weekend — for building types
+  whose day-shape a single rectangle can't represent, e.g. `hotel`'s
+  near-continuous overnight-guest presence with checkout/check-in peaks;
+  mirrors the shape of published DOE/ASHRAE 90.1 prototype-building
+  `Schedule:Compact` fractional schedules more closely than
+  `fixed_schedule`).
+- **A building type with genuine overnight/sleeping occupants**: set
+  `asleep_probabilities` in that type's `schedule.json` (same `(24, 2)`
+  shape and semantics as a household archetype's field of the same name —
+  conditional probability that a present-but-inactive occupant is asleep).
+  Every generator threads it through to a shared `n_asleep` output column,
+  which `core.buem_adapter.to_buem_profiles()` consumes directly as
+  buem's `occ_sleeping` for *any* building type, not just households —
+  see `hotel`'s `schedule.json` for a working example. Building types that
+  never set it (most service buildings) simply always have `n_asleep == 0`.
 
 ## Conventions
 

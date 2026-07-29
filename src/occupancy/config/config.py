@@ -79,8 +79,12 @@ class ScenarioConfig:
             year=int(scenario["year"]),
             num_persons=int(scenario["num_persons"]),
             seed=scenario.get("seed"),
-            include_electricity=bool(scenario.get("include_electricity", False)),
-            output=Path(scenario.get("output", "outputs/occupancy_profile.csv")),
+            include_electricity=bool(
+                scenario.get("include_electricity", False)
+            ),
+            output=Path(
+                scenario.get("output", "outputs/occupancy_profile.csv")
+            ),
             building_type=scenario.get("building_type", "household"),
             archetype=scenario.get("archetype", "generic"),
             region=scenario.get("region", "NL"),

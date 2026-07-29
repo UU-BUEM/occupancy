@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from occupancy.core.equipment import (
     EquipmentContext,
@@ -13,6 +14,7 @@ from occupancy.core.occupancy_engine import (
     OccupancyGenerationContext,
     binomial_independent,
     fixed_schedule,
+    hourly_occupancy_curve,
     markov_chain,
 )
 
@@ -55,6 +57,12 @@ def test_binomial_independent_matches_manual_reimplementation() -> None:
     assert list(actual["n_present"]) == expected_present
     assert list(actual["n_active"]) == expected_active
     assert (actual["n_active"] <= actual["n_present"]).all()
+    assert (
+        actual["n_asleep"] <= actual["n_present"] - actual["n_active"]
+    ).all()
+    assert (
+        actual["n_asleep"] == 0
+    ).all()  # asleep_probabilities defaults to zero
 
 
 def test_markov_chain_produces_valid_states_and_persists() -> None:
@@ -83,6 +91,41 @@ def test_markov_chain_produces_valid_states_and_persists() -> None:
     assert changes < 0.5
 
 
+def test_asleep_probabilities_drive_n_asleep_in_binomial_and_markov() -> None:
+    """n_asleep must be drawn from the present-but-inactive share and never
+    exceed it, and a near-certain asleep_probabilities should make n_asleep
+    track (n_present - n_active) closely."""
+    index = _index(24 * 5)
+    size = 6
+    home_probabilities = np.full((24, 2), 0.95)
+    active_probabilities = np.full((24, 2), 0.05)
+    asleep_probabilities = np.full((24, 2), 0.99)
+
+    for generator, kwargs in (
+        (binomial_independent, {}),
+        (markov_chain, {"params": {"persistence": 0.0}}),
+    ):
+        ctx = OccupancyGenerationContext(
+            size=size,
+            index=index,
+            rng=np.random.default_rng(7),
+            home_probabilities=home_probabilities,
+            active_probabilities=active_probabilities,
+            asleep_probabilities=asleep_probabilities,
+            **kwargs,
+        )
+        frame = generator(ctx)
+        inactive_present = frame["n_present"] - frame["n_active"]
+        assert (frame["n_asleep"] <= inactive_present).all()
+        # asleep_probabilities ~1 -> almost all inactive-present occupants
+        # asleep
+        nonzero = inactive_present > 0
+        if nonzero.any():
+            assert (
+                frame.loc[nonzero, "n_asleep"] / inactive_present[nonzero]
+            ).mean() > 0.9
+
+
 def test_fixed_schedule_respects_hours_weekends_and_closed_months() -> None:
     index = _index(24 * 40)  # spans into February
     ctx = OccupancyGenerationContext(
@@ -107,6 +150,92 @@ def test_fixed_schedule_respects_hours_weekends_and_closed_months() -> None:
     outside_hours = (index.hour < 9) | (index.hour >= 17)
     assert (frame.loc[outside_hours, "n_present"] == 0).all()
 
+    # asleep_probabilities defaults to zero on this ctx -- no sleeping here
+    assert (frame["n_asleep"] == 0).all()
+
+
+def test_hourly_occupancy_curve_follows_explicit_table() -> None:
+    index = _index(24 * 3)
+    curve = np.zeros((24, 2))
+    curve[10] = [1.0, 1.0]  # 10:00 fully occupied, every other hour empty
+    ctx = OccupancyGenerationContext(
+        size=8,
+        index=index,
+        rng=np.random.default_rng(3),
+        params={"occupancy_fraction": curve, "noise": 0.0},
+    )
+    frame = hourly_occupancy_curve(ctx)
+
+    at_ten = index.hour == 10
+    assert (frame.loc[at_ten, "n_present"] == 8).all()
+    assert (frame.loc[~at_ten, "n_present"] == 0).all()
+
+
+def test_hourly_occupancy_curve_requires_occupancy_fraction_param() -> None:
+    ctx = OccupancyGenerationContext(
+        size=8, index=_index(24), rng=np.random.default_rng(3)
+    )
+    with pytest.raises(ValueError, match="occupancy_fraction"):
+        hourly_occupancy_curve(ctx)
+
+
+def test_hourly_occupancy_curve_rejects_wrong_shape() -> None:
+    ctx = OccupancyGenerationContext(
+        size=8,
+        index=_index(24),
+        rng=np.random.default_rng(3),
+        params={"occupancy_fraction": np.zeros((12, 2))},
+    )
+    with pytest.raises(ValueError, match="shape"):
+        hourly_occupancy_curve(ctx)
+
+
+def test_hourly_occupancy_curve_asleep_probabilities_drive_n_asleep() -> None:
+    """Same contract as the other three generators: n_asleep is drawn from
+    the present-but-inactive share via asleep_probabilities -- this is what
+    lets a building type like a hotel (which uses this generator) get
+    genuine overnight sleeping occupants."""
+    index = _index(24 * 5)
+    curve = np.full((24, 2), 0.9)
+    asleep_probabilities = np.full((24, 2), 0.99)
+    ctx = OccupancyGenerationContext(
+        size=10,
+        index=index,
+        rng=np.random.default_rng(11),
+        asleep_probabilities=asleep_probabilities,
+        params={
+            "occupancy_fraction": curve,
+            "active_fraction": 0.05,
+            "noise": 0.0,
+        },
+    )
+    frame = hourly_occupancy_curve(ctx)
+    inactive_present = frame["n_present"] - frame["n_active"]
+    assert (frame["n_asleep"] <= inactive_present).all()
+    nonzero = inactive_present > 0
+    assert (
+        frame.loc[nonzero, "n_asleep"] / inactive_present[nonzero]
+    ).mean() > 0.9
+
+
+def test_hourly_occupancy_curve_respects_closed_months() -> None:
+    index = _index(24 * 40)  # spans into February
+    curve = np.full((24, 2), 0.8)
+    ctx = OccupancyGenerationContext(
+        size=10,
+        index=index,
+        rng=np.random.default_rng(4),
+        params={
+            "occupancy_fraction": curve,
+            "closed_months": [1],
+            "noise": 0.0,
+        },
+    )
+    frame = hourly_occupancy_curve(ctx)
+    is_january = index.month == 1
+    assert (frame.loc[is_january, "n_present"] == 0).all()
+    assert (frame.loc[~is_january, "n_present"] > 0).any()
+
 
 def _equipment_context(profile: pd.DataFrame) -> EquipmentContext:
     return EquipmentContext(
@@ -120,17 +249,23 @@ def _equipment_context(profile: pd.DataFrame) -> EquipmentContext:
 
 def _profile(n_present: list[int], n_active: list[int]) -> pd.DataFrame:
     index = _index(len(n_present))
-    return pd.DataFrame({"n_present": n_present, "n_active": n_active}, index=index)
+    return pd.DataFrame(
+        {"n_present": n_present, "n_active": n_active}, index=index
+    )
 
 
 def test_flat_always_on_is_constant() -> None:
-    spec = EquipmentSpec(name="fridge", rated_power_kw=0.04, strategy="flat_always_on")
+    spec = EquipmentSpec(
+        name="fridge", rated_power_kw=0.04, strategy="flat_always_on"
+    )
     profile = _profile([0, 1, 2], [0, 0, 1])
     power = flat_always_on(spec, _equipment_context(profile))
     assert (power == 0.04).all()
 
 
-def test_linear_in_occupants_scales_with_presence_and_weekend_multiplier() -> None:
+def test_linear_in_occupants_scales_with_presence_and_weekend_multiplier() -> (
+    None
+):
     spec = EquipmentSpec(
         name="other",
         rated_power_kw=0.05,

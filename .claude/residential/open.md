@@ -43,3 +43,15 @@
   confirmed, so treat as not reusable until checked).
 - [households] Only `working_couple` demonstrates `markov_chain`; the
   rest use `binomial_independent`. Intentional scoping, not a bug.
+- [households] **`asleep_probabilities` is hand-authored, not calibrated**
+  — see `resolved.md` for the `n_asleep`/`asleep_probabilities` addition
+  itself. The per-archetype curves (peak overnight, `student_shared`
+  shifted later, `retired_single` with a midday-nap allowance) are
+  illustrative, same caveat as `home_probabilities`/`active_probabilities`
+  above. If/when the Buttitta & Finn 3-state (Active/Non-Active/Absent)
+  approach is adopted, it would likely subsume `asleep_probabilities`
+  entirely rather than sit alongside it — revisit together.
+- [households] **Per-archetype `heat_gain_present_kw`/`heat_gain_active_kw`
+  values are illustrative** (ISO 7730 / ASHRAE Fundamentals Ch. 18-informed
+  ballparks, not survey-calibrated) — see `resolved.md` and
+  `services/open.md`'s matching note for building types.

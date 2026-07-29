@@ -66,5 +66,10 @@ deliberate choices.
 - `occupancy` package has zero coupling to BuEM/weather monorepo
   internals.
 - buem takes no occupancy/internal-gains/electricity input of its own —
-  `occupancy` is the intended upstream source (confirmed by inspecting
-  buem's `cfg_attribute.json`).
+  `occupancy` is the intended upstream source. **Correction (2026-07-28):**
+  the original wording here ("no occupancy/internal-gains/electricity
+  fields") was backwards — buem's `cfg` actually *requires* four series
+  (`Q_ig`/`elecLoad`/`occ_nothome`/`occ_sleeping`) and fails without them;
+  it generates none of them itself. `occupancy.core.buem_adapter.to_buem_profiles()`
+  now supplies all four from an `OccupancyResult`. See `open.md` for the
+  remaining package-name-mismatch follow-up on buem's side.

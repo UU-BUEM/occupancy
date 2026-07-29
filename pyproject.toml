@@ -51,13 +51,13 @@ where = ["src"]
 "occupancy.services_buildings" = ["data/*/*.json"]
 
 [tool.setuptools_scm]
-fallback_version = "2.0.0"
+fallback_version = "3.0.0"
 version_scheme = "guess-next-dev"
 local_scheme = "node-and-date"
 version_file = "src/occupancy/_version.py"
 
 [tool.ruff]
-line-length = 88
+line-length = 79
 target-version = "py312"
 src = ["src"]
 
