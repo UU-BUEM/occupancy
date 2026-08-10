@@ -120,4 +120,5 @@ class HouseholdProfile:
             region=self.region,
             heat_gain_present_kw=self._archetype_spec.heat_gain_present_kw,
             heat_gain_active_kw=self._archetype_spec.heat_gain_active_kw,
+            gain_w_per_m2=self._archetype_spec.gain_w_per_m2,
         )

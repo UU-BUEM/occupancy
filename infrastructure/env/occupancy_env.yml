@@ -17,8 +17,8 @@ channels:
   - defaults
 dependencies:
   - python=3.12
-  - numpy=1.26.*
-  - pandas=2.2.*
+  - numpy>=1.26
+  - pandas>=2.0
   - pytest=8.*
   - pytest-cov=5.*
   - pip

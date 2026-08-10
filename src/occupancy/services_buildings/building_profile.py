@@ -106,4 +106,5 @@ class ServiceBuildingProfile:
             region=self.region,
             heat_gain_present_kw=self._type_spec.heat_gain_present_kw,
             heat_gain_active_kw=self._type_spec.heat_gain_active_kw,
+            gain_w_per_m2=self._type_spec.gain_w_per_m2,
         )

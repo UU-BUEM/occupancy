@@ -6,7 +6,10 @@ from occupancy.households import (
     ElectricityConsumptionProfile,
     HouseholdProfile,
 )
-from occupancy.services_buildings import ServiceBuildingProfile
+from occupancy.services_buildings import (
+    SERVICE_BUILDING_TYPES,
+    ServiceBuildingProfile,
+)
 
 # Back-compat alias: the pre-restructuring public API exposed a single
 # generic `OccupancyProfile`. `HouseholdProfile` is its direct successor.
@@ -18,6 +21,7 @@ except ImportError:
     __version__ = "unknown"
 
 __all__ = [
+    "SERVICE_BUILDING_TYPES",
     "ElectricityConsumptionProfile",
     "HouseholdProfile",
     "OccupancyProfile",

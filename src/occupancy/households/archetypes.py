@@ -47,6 +47,18 @@ class ArchetypeSpec:
     # Defaults match that module's own fallback constants.
     heat_gain_present_kw: float = 0.100
     heat_gain_active_kw: float = 0.150
+    # Area-normalized equipment/lighting internal-gain density [W/m^2],
+    # building-total. Optional -- `None` (the default for every archetype
+    # today) means "no area-driven component", preserving the pre-existing
+    # per-occupant-only behavior exactly. See `core/buem_adapter.py`'s
+    # `to_buem_profiles(floor_area_m2=..., gain_w_per_m2=...)` for how this
+    # blends with `heat_gain_present_kw`/`heat_gain_active_kw` rather than
+    # replacing them (buem's `occupancy_gains_handoff.md` Gap 1). Left unset
+    # for households deliberately -- a household's per-occupant gain is
+    # already a reasonable physical assumption and dwelling floor area
+    # correlates loosely with household size; this field exists mainly for
+    # service-building types where that correlation breaks down.
+    gain_w_per_m2: float | None = None
 
 
 def _parse_archetype(data: dict[str, Any]) -> ArchetypeSpec:
@@ -80,6 +92,11 @@ def _parse_archetype(data: dict[str, Any]) -> ArchetypeSpec:
         ),
         heat_gain_present_kw=float(data.get("heat_gain_present_kw", 0.100)),
         heat_gain_active_kw=float(data.get("heat_gain_active_kw", 0.150)),
+        gain_w_per_m2=(
+            float(data["gain_w_per_m2"])
+            if data.get("gain_w_per_m2") is not None
+            else None
+        ),
     )
 
 

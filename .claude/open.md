@@ -12,15 +12,109 @@ items: `services/open.md`.
   need the *same* archetype id with different data — would need the
   registry key to become `(id, region)` if/when that's needed.
 
+## cross-repo
+- [pylovo/multi-profile] **Idea, not started (2026-07-31)** — two possible
+  future directions raised for occupancy's elecLoad output interacting
+  with more than one profile at a time, neither finalized/scoped:
+  1. Feeding aggregated/peak elecLoad from multiple occupancy profiles
+     (households and/or service buildings) into
+     [enerplanet-pylovo](https://github.com/enerplanet/enerplanet-pylovo),
+     which sizes LV/MV synthetic electricity networks and transformers
+     from peak load. This needs more than N independent
+     `HouseholdProfile`/`ServiceBuildingProfile` runs — realistic
+     diversity/coincidence between profiles feeding the same
+     transformer/feeder node matters, and correlation between profiles
+     was flagged as worth studying rather than assuming independence.
+  2. The reverse direction: if a user (or buem/enerplanet) supplies
+     elecLoad externally rather than having occupancy generate it,
+     occupancy should still be able to compute internal gains
+     (`Q_ig`)/`occ_nothome`/`occ_sleeping` for buem's heat-demand calc.
+     **Scaffolded (2026-08-07)**: `to_buem_profiles(elec_load=...)` now
+     accepts an externally-sourced series and skips the `total_power_kwh`
+     requirement, computing the other three series from occupancy's own
+     generated presence pattern as before. Note this isn't literally
+     "derive Q_ig from the elecLoad values themselves" (there's no
+     elecLoad -> Q_ig transformation) — it's "let elecLoad's *source* be
+     external while Q_ig/occ_nothome/occ_sleeping still come from
+     occupancy's own occupancy-profile generation", which is what the
+     handoff conversation actually needed. Direction 1 (pylovo
+     aggregation/correlation) is still not started/not scoped.
+  Whether these run independently or combined, and where the
+  aggregation/correlation logic would live (occupancy vs. pylovo vs. a
+  new cross-repo layer), is explicitly not decided yet — do not start
+  building an API or batch-generation feature for this without
+  re-confirming scope first.
+- [harmonization] **Idea, not started (2026-07-30)**: a small shared
+  "harmonization" package (env.yml/pyproject.toml/CI-workflow scaffolding)
+  that occupancy/weather/buem would each conda-install from, instead of
+  today's approach — every shared pin or fix (e.g. the numpy/pandas
+  floor-only convention) gets hand-copied across all three repos' own env
+  files and `.github/agents/uu-buem-align.agent.md`'s table by hand each
+  time. See weather's `.claude/open.md` for the fuller note (same idea,
+  cross-posted). Not designed or scoped yet — ask before acting if this
+  comes up again.
+
 ## cross-module
+
 - [all] Keep ruff/mypy/pytest clean; honour `pyproject.toml` settings at
   root.
 - [all] Public API (`OccupancyProfile`/`HouseholdProfile`/
-  `ElectricityConsumptionProfile`/`OccupancyResult`/`ServiceBuildingProfile`,
-  all re-exported from `occupancy/__init__.py`) is the compatibility
-  surface going forward — deep module paths are not guaranteed stable.
+  `ElectricityConsumptionProfile`/`OccupancyResult`/`ServiceBuildingProfile`/
+  `SERVICE_BUILDING_TYPES`, all re-exported from `occupancy/__init__.py`) is
+  the compatibility surface going forward — deep module paths are not
+  guaranteed stable. `SERVICE_BUILDING_TYPES` was promoted to this
+  top-level surface (2026-08-07) specifically so downstream consumers
+  (buem) can enumerate/validate registered service-building-type ids at
+  runtime (`sorted(occupancy.SERVICE_BUILDING_TYPES)`) instead of
+  hand-copying the list into their own schema/enum, which was buem's
+  `occupancy_gains_handoff.md` Gap 3 (registry duplication risk). Consuming
+  it via the deep path (`occupancy.services_buildings.SERVICE_BUILDING_TYPES`)
+  still works but isn't the documented-stable one going forward.
 
 ## external (context only)
+- [buem] **Dynamic num_persons/capacity/year wiring already exists
+  (2026-07-31)** — before assuming buem's `cfg_attribute.py` needs to be
+  made request-aware, check `buem/src/buem/integration/scripts/
+  attribute_builder.py`'s `AttributeBuilder.generate_electricity_profile()`
+  (~lines 146-209) first: it already reads `num_persons`/`capacity`/
+  `building_type`/`seed` from `self.merged_attrs` (the real per-request
+  config, not a static default) and constructs `HouseholdProfile`/
+  `ServiceBuildingProfile` accordingly, forcing `year` to the weather
+  file's year. `cfg_attribute.py`'s module-level `HouseholdProfile(...)`
+  call (~line 114) is only the `AttributeSpec` fallback default, not a
+  bug. One loose end noticed there: line ~180 reads `capacity` from
+  `merged_attrs` without the `int()` cast that `num_persons` gets on line
+  173 — a string capacity from a JSON request could reach occupancy's
+  `ServiceBuildingProfile.__post_init__` and fail its `self.capacity <= 0`
+  comparison. This is a buem-side fix, not an occupancy one — flagged here
+  only as context for whoever next touches that pipeline.
+- [buem] **`occupancy_gains_handoff.md` Gaps 1/3 resolved on occupancy's
+  side (2026-08-07)** — see CHANGELOG `[Unreleased]` for the full detail.
+  Gap 1 (per-occupant-kW-only internal gains, no floor-area normalization):
+  `to_buem_profiles()` gained optional `floor_area_m2`/`gain_w_per_m2`
+  kwargs that blend an area-driven component into `Q_ig` rather than
+  replacing the occupant-driven one; all 8 service-building types now carry
+  an illustrative `gain_w_per_m2`. **Still open on buem's side**: nothing
+  forwards `A_ref`/`computed_A_ref()` into the `floor_area_m2` kwarg yet —
+  `AttributeBuilder.generate_electricity_profile()` would need that wiring
+  (and note it runs before `CfgBuilding.to_cfg_dict()` computes the real
+  `A_ref` today per buem's own `open.md` bug note, so ordering matters).
+  Also still open, on occupancy's side: the `gain_w_per_m2` values are a
+  first illustrative pass (ASHRAE 90.1 Table 9.5.1 LPD-based, not
+  survey-calibrated), same caveat as `heat_gain_present_kw`/
+  `heat_gain_active_kw` already carry. Gap 3 (building-type registry
+  duplication): `occupancy.SERVICE_BUILDING_TYPES` is now a top-level
+  export (see "cross-module" above) — buem's v4 draft schema enum can
+  import it at runtime instead of hand-copying, whenever that gets picked
+  up. Gap 2 (v3/v2 request forwarding of capacity/num_persons/seed/
+  archetype) is buem-only (`geojson_validator.py`, a tier-1 file per buem's
+  own guardrails) — no occupancy-side action possible or taken.
+  Also scaffolded in the same pass, not from the handoff doc but from a
+  separate user-directed forward-looking discussion (see "cross-repo"
+  pylovo/multi-profile note above, direction 2):
+  `to_buem_profiles(elec_load=...)` lets `Q_ig`/`occ_nothome`/
+  `occ_sleeping` be derived from occupancy's own presence pattern even when
+  elecLoad itself comes from somewhere else.
 - [buem] **Superseded** — a prior pass claimed buem's `cfg_attribute.json`
   has no occupancy/internal-gains/electricity fields; that was wrong (or
   read a stale/different version). Direct inspection of

@@ -26,6 +26,7 @@ conda-bld/
 .dmypy.json
 .ruff_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # Local runtime artifacts

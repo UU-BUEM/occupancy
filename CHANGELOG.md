@@ -4,6 +4,57 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-08-10
+
+### Changed
+
+- Removed the `numpy<3`/`pandas<3` upper-bound caps from `pyproject.toml`/`meta.yaml`
+  (floors only now: `numpy>=1.26`, `pandas>=2.0`). The caps weren't actually being
+  enforced in practice — `occupancy_env`'s `pip install -e . --no-deps` workflow
+  skips dependency version checks entirely — and the full `pytest` suite (69/69)
+  passes clean on numpy 2.5.1/pandas 3.0.5. `infrastructure/env/occupancy_env.yml`'s
+  hard `=1.26.*`/`=2.2.*` pins relaxed to match.
+
+### Added
+
+- `to_buem_profiles(floor_area_m2=..., gain_w_per_m2=...)`: optional
+  area-normalized equipment/lighting internal-gain component, **blended
+  with** (not replacing) the existing per-occupant `Q_ig` calculation.
+  Resolves buem's `occupancy_gains_handoff.md` Gap 1 (internal gains were
+  per-occupant kW only, floor area never entered the calculation) on
+  occupancy's side, per the ownership boundary in `CLAUDE.md`: occupancy
+  owns all occupant/equipment-behavior modeling, buem should not need its
+  own gain-density table. New optional `gain_w_per_m2` field on
+  `ArchetypeSpec`/`ServiceBuildingTypeSpec` (`None` by default — no
+  behavior change unless a type opts in) carries a per-type W/m² density
+  through to `OccupancyResult.gain_w_per_m2`; all 8 service-building types
+  now set an illustrative value (ASHRAE 90.1 Table 9.5.1 lighting power
+  density plus, for kitchen/refrigeration-heavy types, an illustrative
+  equipment margin — see each type's `schedule.json` `_comment`; not
+  survey-calibrated). Left unset for household archetypes deliberately
+  (lower-priority case per the handoff doc). The area component is scaled
+  by the same per-hour occupant-presence fraction as `occ_nothome`, so it
+  contributes nothing when the building is empty rather than adding a flat
+  24/7 term. Passing `floor_area_m2` without a resolvable `gain_w_per_m2`
+  (neither the kwarg nor `result.gain_w_per_m2`) raises `ValueError` rather
+  than silently guessing a density or skipping the component.
+- `to_buem_profiles(elec_load=...)`: accepts an externally-sourced
+  `pd.Series` as `elecLoad` instead of requiring a `total_power_kwh` column
+  on `result.profile`. Lets `Q_ig`/`occ_nothome`/`occ_sleeping` still be
+  derived from occupancy's own generated presence pattern when elecLoad
+  comes from somewhere else (buem, real metering, a future pylovo-driven
+  scenario) — scaffolding for the cross-repo multi-profile/pylovo direction
+  noted in `.claude/open.md`. Raises `ValueError` if the given series
+  doesn't cover `result.profile`'s index after reindexing.
+- `occupancy.SERVICE_BUILDING_TYPES` promoted to the top-level public API
+  (`occupancy/__init__.py`, alongside the profile classes) so downstream
+  consumers can enumerate/validate registered building-type ids at runtime
+  (`sorted(occupancy.SERVICE_BUILDING_TYPES)`) instead of hand-copying the
+  list into their own schema — resolves buem's `occupancy_gains_handoff.md`
+  Gap 3 (registry duplication risk) on occupancy's side; the dict itself
+  was already accessible via the deep `occupancy.services_buildings` path,
+  this just makes it part of the documented-stable surface.
+
 ## [3.0.0] - 2026-07-29
 
 ### Added

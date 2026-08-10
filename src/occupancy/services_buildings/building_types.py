@@ -37,6 +37,17 @@ class ServiceBuildingTypeSpec:
     # Defaults match that module's own fallback constants.
     heat_gain_present_kw: float = 0.100
     heat_gain_active_kw: float = 0.150
+    # Area-normalized equipment/lighting internal-gain density [W/m^2],
+    # building-total -- ASHRAE 90.1 Table 9.5.1-style lighting power density
+    # plus an illustrative equipment-load margin for types with heavy
+    # equipment (kitchens, refrigeration). See each type's `schedule.json`
+    # `_comment` for the specific reasoning. `None` means "no area-driven
+    # component" (occupant-count-only gains, the pre-existing behavior).
+    # Blended with, not a replacement for, `heat_gain_present_kw`/
+    # `heat_gain_active_kw` -- see `core/buem_adapter.py`'s
+    # `to_buem_profiles(floor_area_m2=..., gain_w_per_m2=...)` (buem's
+    # `occupancy_gains_handoff.md` Gap 1).
+    gain_w_per_m2: float | None = None
     # Conditional on being present-but-inactive: probability of being
     # asleep. Same mechanism as households (`ArchetypeSpec`) -- most
     # service-building types leave this all-zero (no overnight occupants),
@@ -86,6 +97,11 @@ def load_building_type(type_id: str) -> ServiceBuildingTypeSpec:
             schedule.get("heat_gain_present_kw", 0.100)
         ),
         heat_gain_active_kw=float(schedule.get("heat_gain_active_kw", 0.150)),
+        gain_w_per_m2=(
+            float(schedule["gain_w_per_m2"])
+            if schedule.get("gain_w_per_m2") is not None
+            else None
+        ),
         asleep_probabilities=(
             np.asarray(asleep, dtype=float)
             if asleep is not None

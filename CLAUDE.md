@@ -13,6 +13,18 @@ floor, windows, doors, ventilation, U-values) and takes no occupancy/
 internal-gains/electricity input itself — that's this package's job to
 supply.
 
+**Ownership boundary (user directive, 2026-08-07):** every occupancy-related
+activity — people-presence/activity/sleep state, equipment on/off and power
+draw, and any future occupant- or equipment-driven behavior — is modeled
+inside *this* package, not downstream. buem owns the envelope/thermal
+network and consumes occupancy's output; it should never need to reimplement
+occupant- or equipment-behavior logic of its own (e.g. its own internal-
+gains-density table) just because occupancy's existing output doesn't yet
+cover a given case — extend occupancy instead. This is why, e.g., Gap 1's
+floor-area-normalized internal gains (see `to_buem_profiles()`'s
+`floor_area_m2`/`gain_w_per_m2`) were implemented on occupancy's side rather
+than left to buem to compute independently.
+
 The original design proposal is in
 `docs/plans/equipment-service-buildings-architecture.md`, superseded during
 implementation; that file points to where the actual rationale now lives:

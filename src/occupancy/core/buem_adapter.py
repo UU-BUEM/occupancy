@@ -55,6 +55,9 @@ def to_buem_profiles(
     gain_present_kw: float | None = None,
     gain_active_kw: float | None = None,
     sleep_window: tuple[int, int] | None = DEFAULT_SLEEP_WINDOW,
+    floor_area_m2: float | None = None,
+    gain_w_per_m2: float | None = None,
+    elec_load: pd.Series | None = None,
 ) -> dict[str, pd.Series]:
     """Convert one ``OccupancyResult`` into buem's four required cfg series.
 
@@ -66,7 +69,8 @@ def to_buem_profiles(
     equipment power was generated) -- pass a ``ServiceBuildingProfile``
     result (equipment included by default) or a household result built via
     ``ElectricityConsumptionProfile.to_result()`` rather than a bare
-    ``HouseholdProfile.to_result()``.
+    ``HouseholdProfile.to_result()`` -- *unless* ``elec_load`` is given (see
+    below), in which case that requirement is skipped entirely.
 
     ``gain_present_kw``/``gain_active_kw``, if given, override everything
     else. Otherwise the per-occupant heat gain is taken from
@@ -83,16 +87,40 @@ def to_buem_profiles(
     never set ``asleep_probabilities`` so ``n_asleep`` stays 0 for them,
     but a type that does (e.g. a hotel) gets genuine ``occ_sleeping``
     through the same mechanism as households.
+
+    ``floor_area_m2``/``gain_w_per_m2`` add an area-normalized equipment/
+    lighting gain component *blended with* (not replacing) the per-occupant
+    ``Q_ig`` above -- buem's ``occupancy_gains_handoff.md`` Gap 1. Pass
+    ``floor_area_m2`` (buem's ``A_ref``/``computed_A_ref()``, this module has
+    no notion of it otherwise) to opt in; the area component is scaled by
+    the same per-hour occupant-presence fraction used for ``occ_nothome``
+    (``n_present / result.num_persons``), so it contributes nothing when the
+    building is empty rather than adding a flat 24/7 term. ``gain_w_per_m2``,
+    if given, overrides ``result.gain_w_per_m2`` (set by the originating
+    archetype/building-type spec); if ``floor_area_m2`` is given but neither
+    resolves to a value, raises ``ValueError`` rather than silently skipping
+    the area component or guessing a density.
+
+    ``elec_load``, if given, is used as ``elecLoad`` directly (reindexed
+    onto ``result.profile``'s index) instead of requiring a
+    ``total_power_kwh`` column -- for when elecLoad comes from somewhere
+    other than occupancy's own equipment simulation (buem-supplied,
+    real metering, ...) but ``Q_ig``/``occ_nothome``/``occ_sleeping`` should
+    still be derived from occupancy's own generated presence pattern. See
+    ``.claude/open.md`` "cross-repo" for the broader pylovo/multi-profile
+    context this is scaffolding for.
     """
     profile = result.profile
-    if "total_power_kwh" not in profile.columns:
+    if elec_load is None and "total_power_kwh" not in profile.columns:
         raise ValueError(
-            "OccupancyResult.profile has no 'total_power_kwh' column -- "
-            "generate equipment power first (ServiceBuildingProfile does "
-            "this by default; for households use "
-            "ElectricityConsumptionProfile(occupancy_profile=...).to_result() "
-            "instead of HouseholdProfile.to_result()) before converting to "
-            "buem's elecLoad."
+            "OccupancyResult.profile has no 'total_power_kwh' column and no "
+            "elec_load was given -- either generate equipment power first "
+            "(ServiceBuildingProfile does this by default; for households "
+            "use ElectricityConsumptionProfile(occupancy_profile=...)."
+            "to_result() instead of HouseholdProfile.to_result()), or pass "
+            "elec_load= explicitly with an externally-sourced series (e.g. "
+            "from buem or real metering) to still get Q_ig/occ_nothome/"
+            "occ_sleeping without occupancy generating its own elecLoad."
         )
     if result.num_persons <= 0:
         raise ValueError(
@@ -123,12 +151,41 @@ def to_buem_profiles(
     n_inactive_present = n_present - n_active
     num_persons = float(result.num_persons)
 
+    occupant_gain_kw = (
+        n_inactive_present * gain_present + n_active * gain_active
+    )
+
+    resolved_gain_w_per_m2 = (
+        gain_w_per_m2 if gain_w_per_m2 is not None else result.gain_w_per_m2
+    )
+    if floor_area_m2 is not None:
+        if resolved_gain_w_per_m2 is None:
+            raise ValueError(
+                "floor_area_m2 was given but no gain_w_per_m2 is available "
+                "-- pass gain_w_per_m2 explicitly, or use a building_type/"
+                "archetype whose spec defines one."
+            )
+        presence_fraction = np.clip(n_present / num_persons, 0.0, 1.0)
+        area_gain_kw = (
+            resolved_gain_w_per_m2 * floor_area_m2 / 1000.0
+        ) * presence_fraction
+    else:
+        area_gain_kw = 0.0
+
     Q_ig = pd.Series(
-        n_inactive_present * gain_present + n_active * gain_active,
+        occupant_gain_kw + area_gain_kw,
         index=profile.index,
         name="Q_ig",
     )
-    elecLoad = profile["total_power_kwh"].rename("elecLoad")
+    if elec_load is not None:
+        elecLoad = elec_load.reindex(profile.index).rename("elecLoad")
+        if elecLoad.isna().any():
+            raise ValueError(
+                "elec_load does not cover result.profile's index after "
+                "reindexing -- pass a series aligned to result.profile.index."
+            )
+    else:
+        elecLoad = profile["total_power_kwh"].rename("elecLoad")
     occ_nothome = pd.Series(
         1.0 - np.clip(n_present / num_persons, 0.0, 1.0),
         index=profile.index,

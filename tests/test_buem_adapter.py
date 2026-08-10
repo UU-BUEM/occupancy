@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from occupancy.core.buem_adapter import to_buem_profiles
@@ -129,6 +130,88 @@ def test_explicit_gain_kwargs_override_per_type_value() -> None:
     np.testing.assert_allclose(
         buem_profiles["Q_ig"].to_numpy(), n_present * 0.5
     )
+
+
+def test_floor_area_blends_with_not_replaces_occupant_gains() -> None:
+    result = ServiceBuildingProfile(
+        building_type="office", year=2025, seed=3
+    ).to_result()
+    baseline = to_buem_profiles(result)
+    with_area = to_buem_profiles(result, floor_area_m2=500.0)
+
+    n_present = result.profile["n_present"].to_numpy(dtype=float)
+    presence_fraction = np.clip(n_present / result.num_persons, 0.0, 1.0)
+    expected_area_gain = (
+        result.gain_w_per_m2 * 500.0 / 1000.0
+    ) * presence_fraction
+
+    np.testing.assert_allclose(
+        with_area["Q_ig"].to_numpy(),
+        baseline["Q_ig"].to_numpy() + expected_area_gain,
+    )
+    # Never empty of an occupant-driven term -- area component is additive.
+    assert (with_area["Q_ig"] >= baseline["Q_ig"]).all()
+    # Zero occupant presence -> zero area contribution too (scaled by
+    # presence_fraction, not a flat 24/7 term).
+    closed_hours = n_present == 0
+    if closed_hours.any():
+        np.testing.assert_allclose(
+            with_area["Q_ig"].to_numpy()[closed_hours],
+            baseline["Q_ig"].to_numpy()[closed_hours],
+        )
+
+
+def test_gain_w_per_m2_kwarg_overrides_per_type_value() -> None:
+    result = ServiceBuildingProfile(
+        building_type="office", year=2025, seed=3
+    ).to_result()
+    overridden = to_buem_profiles(
+        result, floor_area_m2=200.0, gain_w_per_m2=100.0
+    )
+    default = to_buem_profiles(result, floor_area_m2=200.0)
+    assert (overridden["Q_ig"] >= default["Q_ig"]).all()
+    assert (overridden["Q_ig"] > default["Q_ig"]).any()
+
+
+def test_floor_area_without_gain_w_per_m2_raises() -> None:
+    household = HouseholdProfile(num_persons=2, year=2025, seed=1)
+    result = ElectricityConsumptionProfile(
+        occupancy_profile=household, seed=1
+    ).to_result()
+    assert result.gain_w_per_m2 is None  # households leave it unset today
+    with pytest.raises(ValueError, match="gain_w_per_m2"):
+        to_buem_profiles(result, floor_area_m2=100.0)
+
+
+def test_elec_load_kwarg_bypasses_total_power_kwh_requirement() -> None:
+    household = HouseholdProfile(num_persons=3, year=2025, seed=1)
+    bare = household.to_result()  # no total_power_kwh column
+    assert "total_power_kwh" not in bare.profile.columns
+
+    external_load = pd.Series(0.42, index=bare.profile.index)
+    buem_profiles = to_buem_profiles(bare, elec_load=external_load)
+
+    assert set(buem_profiles) == _EXPECTED_KEYS
+    np.testing.assert_allclose(
+        buem_profiles["elecLoad"].to_numpy(), external_load.to_numpy()
+    )
+    # Q_ig/occ_nothome/occ_sleeping still come from occupancy's own
+    # generated presence pattern, unaffected by the external elecLoad.
+    n_present = bare.profile["n_present"].to_numpy(dtype=float)
+    expected_occ_nothome = 1.0 - np.clip(
+        n_present / bare.num_persons, 0.0, 1.0
+    )
+    np.testing.assert_allclose(
+        buem_profiles["occ_nothome"].to_numpy(), expected_occ_nothome
+    )
+
+
+def test_elec_load_misaligned_index_raises() -> None:
+    household = HouseholdProfile(num_persons=2, year=2025, seed=1)
+    bare = household.to_result()
+    short_load = pd.Series(0.1, index=bare.profile.index[:10])
+    with pytest.raises(ValueError, match="elec_load"):
+        to_buem_profiles(bare, elec_load=short_load)
 
 
 def test_rejects_zero_num_persons() -> None:

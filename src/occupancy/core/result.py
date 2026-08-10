@@ -22,6 +22,12 @@ class OccupancyResult:
     # None means "no per-type value available -- use the adapter's default".
     heat_gain_present_kw: float | None = None
     heat_gain_active_kw: float | None = None
+    # Area-normalized equipment/lighting internal-gain density [W/m^2],
+    # carried from the originating archetype/building-type spec the same
+    # way as `heat_gain_present_kw`/`heat_gain_active_kw`. None means "no
+    # per-type value available" -- `to_buem_profiles(floor_area_m2=...)`
+    # then requires an explicit `gain_w_per_m2` override or raises.
+    gain_w_per_m2: float | None = None
     generated_at: str = field(
         default_factory=lambda: datetime.now(tz=UTC).isoformat()
     )
