@@ -1,11 +1,11 @@
 {
-  "_comment": "Illustrative defaults, not survey-calibrated. Demonstrates the markov_chain generator strategy (see core/occupancy_engine.py); persistence/TPM synthesized at runtime from these marginals, not copied from any external dataset.",
+  "_comment": "home_probabilities/active_probabilities/asleep_probabilities below remain illustrative, not survey-calibrated -- but the generator itself now draws real active-occupant-count transitions from CREST's Domestic Electricity Demand Model 1.0e (see core/occupancy_engine.py's markov_chain_crest and households/crest_tpm.py), not a synthesized persistence-blend formula. Changed from 'markov_chain' to 'markov_chain_crest' -- this is a same-seed reproducibility break vs. earlier releases (package is Alpha; see CHANGELOG).",
   "id": "working_couple",
   "description": "Two working adults, no children. Both typically away 09:00-17:00 on weekdays.",
   "region": "NL",
   "num_persons_default": 2,
-  "generator": "markov_chain",
-  "generator_params": { "persistence": 0.75 },
+  "generator": "markov_chain_crest",
+  "generator_params": {},
   "home_probabilities": [
     [0.95, 0.90],
     [0.95, 0.90],

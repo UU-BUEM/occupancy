@@ -16,7 +16,9 @@ from occupancy.core.occupancy_engine import (
     fixed_schedule,
     hourly_occupancy_curve,
     markov_chain,
+    markov_chain_crest,
 )
+from occupancy.households.crest_tpm import resolve_markov_chain_crest_params
 
 
 def _index(hours: int = 72) -> pd.DatetimeIndex:
@@ -89,6 +91,52 @@ def test_markov_chain_produces_valid_states_and_persists() -> None:
     # High persistence -> state should change on a minority of timesteps.
     changes = (frame["n_active"].diff().fillna(0) != 0).mean()
     assert changes < 0.5
+
+
+def test_markov_chain_crest_produces_valid_states() -> None:
+    index = _index(24 * 7)
+    size = 3
+    home_probabilities = np.full((24, 2), 0.9)
+    active_probabilities = np.full((24, 2), 0.5)
+    params = resolve_markov_chain_crest_params(size, {})
+
+    ctx = OccupancyGenerationContext(
+        size=size,
+        index=index,
+        rng=np.random.default_rng(1),
+        home_probabilities=home_probabilities,
+        active_probabilities=active_probabilities,
+        params=params,
+    )
+    frame = markov_chain_crest(ctx)
+
+    assert (frame["n_active"] >= 0).all()
+    assert (frame["n_active"] <= size).all()
+    assert (frame["n_present"] >= frame["n_active"]).all()
+    assert (frame["n_present"] <= size).all()
+
+
+def test_markov_chain_crest_requires_tpm_params() -> None:
+    ctx = OccupancyGenerationContext(
+        size=2, index=_index(24), rng=np.random.default_rng(1)
+    )
+    with pytest.raises(ValueError, match="tpm_weekday"):
+        markov_chain_crest(ctx)
+
+
+def test_markov_chain_crest_rejects_mismatched_tpm_shape() -> None:
+    bad_params = {
+        "tpm_weekday": np.zeros((24, 5, 5)),  # wrong size for size=2
+        "tpm_weekend": np.zeros((24, 5, 5)),
+    }
+    ctx = OccupancyGenerationContext(
+        size=2,
+        index=_index(24),
+        rng=np.random.default_rng(1),
+        params=bad_params,
+    )
+    with pytest.raises(ValueError, match="shape"):
+        markov_chain_crest(ctx)
 
 
 def test_asleep_probabilities_drive_n_asleep_in_binomial_and_markov() -> None:

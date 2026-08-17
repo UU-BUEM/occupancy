@@ -212,6 +212,115 @@ def markov_chain(ctx: OccupancyGenerationContext) -> pd.DataFrame:
     )
 
 
+def markov_chain_crest(ctx: OccupancyGenerationContext) -> pd.DataFrame:
+    """Like :func:`markov_chain`, but the active-occupant-count transition
+    is drawn from a real, precomposed hourly CREST transition-probability
+    matrix instead of a synthesized persistence-blend formula.
+
+    ``ctx.params`` must carry ``tpm_weekday``/``tpm_weekend``, each shaped
+    ``(24, n, n)`` with ``n == ctx.size + 1`` (row-stochastic: row ``i`` is
+    the distribution over next-hour active-occupant counts given ``i`` this
+    hour) — see
+    :func:`occupancy.households.crest_tpm.resolve_markov_chain_crest_params`,
+    which builds these params from the real CREST workbook data. This
+    function itself has no notion of "CREST" or "households" — it only
+    consumes the params, exactly like :func:`hourly_occupancy_curve`
+    consuming a generic ``occupancy_fraction`` param.
+
+    Present-vs-active split and ``n_asleep`` are still derived from
+    ``ctx.home_probabilities``/``active_probabilities``/
+    ``asleep_probabilities`` exactly as in :func:`markov_chain` — CREST's
+    tpm sheets model active-occupant-count transitions only, not the
+    presence/sleep split, so this generator does not claim full CREST
+    calibration of every output column, only the active-occupant
+    transition dynamics.
+    """
+    tpm_weekday = ctx.params.get("tpm_weekday")
+    tpm_weekend = ctx.params.get("tpm_weekend")
+    if tpm_weekday is None or tpm_weekend is None:
+        raise ValueError(
+            "markov_chain_crest requires 'tpm_weekday' and 'tpm_weekend' "
+            "in generator_params (see "
+            "occupancy.households.crest_tpm.resolve_markov_chain_crest_params)"
+        )
+    tpm_weekday = np.asarray(tpm_weekday, dtype=float)
+    tpm_weekend = np.asarray(tpm_weekend, dtype=float)
+    n_states = ctx.size + 1
+    expected_shape = (24, n_states, n_states)
+    if (
+        tpm_weekday.shape != expected_shape
+        or tpm_weekend.shape != expected_shape
+    ):
+        raise ValueError(
+            f"tpm_weekday/tpm_weekend must have shape {expected_shape} "
+            f"(24, ctx.size + 1, ctx.size + 1); got "
+            f"{tpm_weekday.shape} / {tpm_weekend.shape}"
+        )
+
+    states = np.arange(n_states)
+
+    first = ctx.index[0]
+    hour0, weekend0 = first.hour, 1 if first.weekday() >= 5 else 0
+    current_state = int(
+        ctx.rng.choice(
+            states,
+            p=_binomial_pmf(
+                ctx.size, ctx.active_probabilities[hour0][weekend0]
+            ),
+        )
+    )
+
+    n_present: list[int] = []
+    n_active: list[int] = []
+    n_asleep: list[int] = []
+    activity: list[str] = []
+
+    for ts in ctx.index:
+        hour = ts.hour
+        weekend_index = 1 if ts.weekday() >= 5 else 0
+        p_home = ctx.home_probabilities[hour][weekend_index]
+        p_active = ctx.active_probabilities[hour][weekend_index]
+        p_asleep = ctx.asleep_probabilities[hour][weekend_index]
+
+        tpm = tpm_weekend if weekend_index else tpm_weekday
+        row_probs = tpm[hour, current_state]
+        current_state = int(ctx.rng.choice(states, p=row_probs))
+
+        active = current_state
+        extra_capacity = ctx.size - active
+        p_extra_present = 0.0
+        if extra_capacity > 0 and p_active < 1.0:
+            p_extra_present = float(
+                np.clip((p_home - p_active) / (1 - p_active), 0.0, 1.0)
+            )
+        extra_present = (
+            int(ctx.rng.binomial(extra_capacity, p_extra_present))
+            if extra_capacity > 0
+            else 0
+        )
+        present = active + extra_present
+        asleep = (
+            int(ctx.rng.binomial(extra_present, p_asleep))
+            if extra_present
+            else 0
+        )
+
+        n_present.append(present)
+        n_active.append(active)
+        n_asleep.append(asleep)
+        activity.append(_activity_label(present, active))
+
+    return pd.DataFrame(
+        {
+            "n_present": n_present,
+            "n_active": n_active,
+            "n_asleep": n_asleep,
+            "activity": activity,
+        },
+        index=ctx.index,
+    )
+
+
 def fixed_schedule(ctx: OccupancyGenerationContext) -> pd.DataFrame:
     """Deterministic open/close-hours occupancy ramp with light stochastic
     noise — the typical shape for service buildings (offices, schools,
@@ -354,6 +463,7 @@ def hourly_occupancy_curve(ctx: OccupancyGenerationContext) -> pd.DataFrame:
 _GENERATORS: dict[str, GeneratorFn] = {
     "binomial_independent": binomial_independent,
     "markov_chain": markov_chain,
+    "markov_chain_crest": markov_chain_crest,
     "fixed_schedule": fixed_schedule,
     "hourly_occupancy_curve": hourly_occupancy_curve,
 }
