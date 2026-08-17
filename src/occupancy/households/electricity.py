@@ -22,6 +22,18 @@ _BASE_EQUIPMENT: dict[str, EquipmentSpec] = normalize_equipment_table(
     load_json_resource(_PACKAGE, _EQUIPMENT_PATH)
 )
 
+# Top-level-exportable registry of the 29 household equipment ids, mirroring
+# `SERVICE_BUILDING_TYPES`'s promotion (buem's `occupancy_gains_handoff.md`
+# Gap 3) -- closes buem's `occupancy_module_activities.md` item 1. Lets a
+# downstream consumer validate/enumerate against the live registry (e.g.
+# `sorted(occupancy.EQUIPMENT_TYPES)`) instead of hand-copying ids or
+# reaching into the deep `occupancy.households.electricity` module path.
+# The same live dict `default_equipment_table()` copies from -- not copied
+# again here -- so it reflects any item added via a future
+# `households/data/equipment.json` change without needing a second export
+# to stay in sync.
+EQUIPMENT_TYPES: dict[str, EquipmentSpec] = _BASE_EQUIPMENT
+
 # One flag can gate several individual equipment items (e.g. "fridge" covers
 # every cold-appliance type CREST distinguishes). Every item in
 # households/data/equipment.json must appear in exactly one list here.
@@ -65,6 +77,15 @@ _LEGACY_FLAG_TO_EQUIPMENT: dict[str, list[str]] = {
 # outcomes don't perturb the equipment-trigger draw sequence (and vice versa).
 _OWNERSHIP_SEED_OFFSET = 1_000_000
 
+# The equipment category whose subtotal backs the `cooking_active` signal
+# (buem's `dhw_cooking_heat_handoff.md` ask #2) -- matches the `category`
+# string already used by hob/oven/microwave/kettle/small_cooking_group in
+# `data/equipment.json`. No new data or modeling capability: this reuses
+# the same stochastic kitchen-equipment generation that already drives
+# `total_power_kwh`, just exposing that one category's contribution
+# separately instead of leaving it buried in the aggregate.
+_COOKING_CATEGORY = "kitchen"
+
 
 def default_equipment_table() -> dict[str, EquipmentSpec]:
     """A fresh copy of the default household equipment specs."""
@@ -104,6 +125,15 @@ class ElectricityConsumptionProfile:
     seeded Bernoulli "does this household own one of these" draw -- so e.g.
     two otherwise-identical households won't both have a dishwasher just
     because ``has_laundry`` is on.
+
+    The generated profile also carries a boolean ``cooking_active`` column
+    (True whenever the ``"kitchen"`` equipment category -- hob/oven/
+    microwave/kettle/small_cooking_group -- is drawing above-standby
+    power), separable from the aggregate ``total_power_kwh`` -- buem's
+    ``dhw_cooking_heat_handoff.md`` ask #2, for driving a future
+    gas-cooking-energy term from real per-household cooking timing rather
+    than a flat national average. Reuses the existing kitchen-equipment
+    stochastic generation; no new modeling capability or data source.
     """
 
     occupancy_profile: HouseholdProfile
@@ -178,8 +208,13 @@ class ElectricityConsumptionProfile:
             for name, spec in self.equipment.items()
         ]
 
+        category_totals: dict[str, np.ndarray] = {}
         occ_profile["total_power_kwh"] = generate_equipment_power(
-            specs, occ_profile, self._rng
+            specs, occ_profile, self._rng, category_totals=category_totals
+        )
+        occ_profile["cooking_active"] = (
+            category_totals.get(_COOKING_CATEGORY, np.zeros(len(occ_profile)))
+            > 0
         )
         self._profile = occ_profile
         return occ_profile

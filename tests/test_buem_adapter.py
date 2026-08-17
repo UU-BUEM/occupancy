@@ -12,6 +12,12 @@ from occupancy.households import (
 from occupancy.services_buildings import ServiceBuildingProfile
 
 _EXPECTED_KEYS = {"Q_ig", "elecLoad", "occ_nothome", "occ_sleeping"}
+# `cooking_active` is included whenever `result.profile` carries the
+# column -- i.e. whenever equipment was generated at all (any building/
+# household without a "kitchen"-category item still gets an all-False
+# column, not an absent one -- see ElectricityConsumptionProfile.generate/
+# ServiceBuildingProfile.generate).
+_EXPECTED_KEYS_WITH_EQUIPMENT = _EXPECTED_KEYS | {"cooking_active"}
 
 
 def test_service_building_result_converts_directly() -> None:
@@ -20,7 +26,7 @@ def test_service_building_result_converts_directly() -> None:
     ).to_result()
     buem_profiles = to_buem_profiles(result)
 
-    assert set(buem_profiles) == _EXPECTED_KEYS
+    assert set(buem_profiles) == _EXPECTED_KEYS_WITH_EQUIPMENT
     for series in buem_profiles.values():
         assert len(series) == len(result.profile)
         assert series.index.equals(result.profile.index)
@@ -61,7 +67,7 @@ def test_household_result_needs_equipment_wrapper() -> None:
     ).to_result()
     buem_profiles = to_buem_profiles(with_equipment)
 
-    assert set(buem_profiles) == _EXPECTED_KEYS
+    assert set(buem_profiles) == _EXPECTED_KEYS_WITH_EQUIPMENT
     # occ_sleeping is real generator output (n_asleep / num_persons), not a
     # heuristic, whenever the profile carries an n_asleep column.
     expected_sleeping = (

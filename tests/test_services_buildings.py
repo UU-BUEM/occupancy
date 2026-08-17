@@ -1,5 +1,6 @@
 import pytest
 
+from occupancy.core.equipment import EquipmentSpec
 from occupancy.services_buildings import (
     SERVICE_BUILDING_TYPES,
     ServiceBuildingProfile,
@@ -37,6 +38,7 @@ def test_building_type_generates_valid_profile(building_type: str) -> None:
         "n_asleep",
         "activity",
         "total_power_kwh",
+        "cooking_active",
     ]
     assert (profile["n_active"] <= profile["n_present"]).all()
     assert (profile["total_power_kwh"] >= 0).all()
@@ -127,6 +129,78 @@ def test_include_equipment_false_omits_power_column() -> None:
     assert "total_power_kwh" not in profile.columns
 
 
+def test_get_equipment_table_defaults_to_building_type_table() -> None:
+    profile = ServiceBuildingProfile(building_type="office", year=2025, seed=1)
+    assert profile.get_equipment_table() == dict(
+        SERVICE_BUILDING_TYPES["office"].equipment
+    )
+
+
+def test_custom_equipment_table_excludes_absent_items() -> None:
+    base = ServiceBuildingProfile(
+        building_type="office", year=2025, seed=1
+    ).get_equipment_table()
+    assert len(base) > 1
+    kept_name = next(iter(base))
+    filtered = {kept_name: base[kept_name]}
+
+    profile = ServiceBuildingProfile(
+        building_type="office", year=2025, seed=1, equipment=filtered
+    )
+    assert profile.get_equipment_table() == filtered
+
+    only_kept = ServiceBuildingProfile(
+        building_type="office",
+        year=2025,
+        seed=1,
+        equipment={kept_name: base[kept_name]},
+    ).get_profile()
+    full = ServiceBuildingProfile(
+        building_type="office", year=2025, seed=1
+    ).get_profile()
+    # Excluding items can only reduce (never increase) total power draw.
+    assert (
+        only_kept["total_power_kwh"] <= full["total_power_kwh"] + 1e-9
+    ).all()
+
+
+def test_include_equipment_false_wins_over_custom_equipment() -> None:
+    base = ServiceBuildingProfile(
+        building_type="office", year=2025, seed=1
+    ).get_equipment_table()
+    profile = ServiceBuildingProfile(
+        building_type="office",
+        year=2025,
+        seed=1,
+        include_equipment=False,
+        equipment=base,
+    ).get_profile()
+    assert "total_power_kwh" not in profile.columns
+
+
+def test_empty_equipment_dict_keeps_column_present_but_zero() -> None:
+    profile = ServiceBuildingProfile(
+        building_type="office", year=2025, seed=1, equipment={}
+    ).get_profile()
+    assert "total_power_kwh" in profile.columns
+    assert (profile["total_power_kwh"] == 0).all()
+
+
+def test_custom_equipment_spec_contributes_expected_power() -> None:
+    spec = EquipmentSpec(
+        name="always_on_test_item",
+        rated_power_kw=1.0,
+        strategy="flat_always_on",
+    )
+    profile = ServiceBuildingProfile(
+        building_type="office",
+        year=2025,
+        seed=1,
+        equipment={"always_on_test_item": spec},
+    ).get_profile()
+    assert (profile["total_power_kwh"] == 1.0).all()
+
+
 @pytest.mark.parametrize("building_type", _ALL_BUILDING_TYPES)
 def test_building_types_have_heat_gain_and_to_result_carries_it(
     building_type: str,
@@ -140,3 +214,40 @@ def test_building_types_have_heat_gain_and_to_result_carries_it(
     ).to_result()
     assert result.heat_gain_present_kw == spec.heat_gain_present_kw
     assert result.heat_gain_active_kw == spec.heat_gain_active_kw
+
+
+def test_default_seed_is_deterministic_and_varies_with_capacity() -> None:
+    """Same rationale/mechanism as HouseholdProfile's matching test --
+    seed=None resolves to a stable hash of the profile's own construction
+    inputs, not OS entropy (buem's occupancy_gains_handoff.md "Seed
+    ownership" ask)."""
+    kwargs = dict(building_type="office", year=2025, capacity=20)
+    first = ServiceBuildingProfile(**kwargs)
+    second = ServiceBuildingProfile(**kwargs)
+    assert first.seed is not None
+    assert first.seed == second.seed
+    assert first.get_profile().equals(second.get_profile())
+
+    other_capacity = ServiceBuildingProfile(
+        building_type="office", year=2025, capacity=40
+    )
+    assert other_capacity.seed != first.seed
+
+
+def test_cooking_active_present_for_kitchen_equipped_building_types() -> None:
+    """restaurant carries "kitchen"-category equipment -- cooking_active
+    must show real activity over a full year, same convention as
+    ElectricityConsumptionProfile's (buem's dhw_cooking_heat_handoff.md ask
+    #2)."""
+    profile = ServiceBuildingProfile(
+        building_type="restaurant", year=2025, seed=1
+    ).get_profile()
+    assert profile["cooking_active"].dtype == bool
+    assert profile["cooking_active"].any()
+
+
+def test_cooking_active_false_without_kitchen_equipment() -> None:
+    profile = ServiceBuildingProfile(
+        building_type="warehouse", year=2025, seed=1
+    ).get_profile()
+    assert not profile["cooking_active"].any()

@@ -63,7 +63,14 @@ def to_buem_profiles(
 
     Returns a dict with keys ``"Q_ig"``, ``"elecLoad"``, ``"occ_nothome"``,
     ``"occ_sleeping"`` -- assign directly into buem's ``cfg`` dict, e.g.
-    ``cfg.update(to_buem_profiles(result))``.
+    ``cfg.update(to_buem_profiles(result))``. When ``result.profile`` carries
+    a ``cooking_active`` column (households/service-building types whose
+    equipment table includes a ``"kitchen"``-category item -- see
+    ``ElectricityConsumptionProfile``/``ServiceBuildingProfile``), a fifth
+    ``"cooking_active"`` boolean series is included too, for a future
+    gas-cooking-energy term driven by real per-building cooking timing
+    (buem's ``dhw_cooking_heat_handoff.md`` ask #2). Absent otherwise --
+    buem's four required keys are unaffected either way.
 
     ``result.profile`` must already carry a ``total_power_kwh`` column (i.e.
     equipment power was generated) -- pass a ``ServiceBuildingProfile``
@@ -216,9 +223,14 @@ def to_buem_profiles(
     else:
         occ_sleeping = pd.Series(0.0, index=profile.index, name="occ_sleeping")
 
-    return {
+    result_profiles: dict[str, pd.Series] = {
         "Q_ig": Q_ig,
         "elecLoad": elecLoad,
         "occ_nothome": occ_nothome,
         "occ_sleeping": occ_sleeping,
     }
+    if "cooking_active" in profile.columns:
+        result_profiles["cooking_active"] = profile["cooking_active"].rename(
+            "cooking_active"
+        )
+    return result_profiles

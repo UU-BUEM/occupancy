@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Any
 
@@ -11,7 +12,12 @@ from occupancy.core.occupancy_engine import (
     get_generator,
 )
 from occupancy.core.result import OccupancyResult
+from occupancy.core.seed import derive_default_seed
 from occupancy.households.archetypes import get_archetype
+from occupancy.households.crest_tpm import (
+    MAX_CALIBRATED_SIZE,
+    resolve_markov_chain_crest_params,
+)
 
 
 @dataclass
@@ -29,6 +35,12 @@ class HouseholdProfile:
     num_persons: int
     year: int
     archetype: str = "generic"
+    # `None` (the default) no longer means "seed from OS entropy" -- it
+    # resolves to a deterministic hash of this profile's own construction
+    # inputs (see `core.seed.derive_default_seed`), overwritten onto this
+    # field in `__post_init__` so downstream consumers relying on
+    # `self.seed` (e.g. `ElectricityConsumptionProfile`) inherit it too.
+    # Pass an explicit int to override with a caller-chosen seed instead.
     seed: int | None = None
     region: str = "NL"
     home_probabilities: np.ndarray | None = None
@@ -78,6 +90,14 @@ class HouseholdProfile:
             else archetype_spec.generator_params
         )
 
+        if self.seed is None:
+            self.seed = derive_default_seed(
+                kind="household",
+                size=self.num_persons,
+                year=self.year,
+                archetype=self.archetype,
+                region=self.region,
+            )
         self._rng = np.random.default_rng(self.seed)
         self._index = pd.date_range(
             start=f"{self.year}-01-01",
@@ -92,6 +112,24 @@ class HouseholdProfile:
         assert self.active_probabilities is not None
         assert self.asleep_probabilities is not None
         rng = self._rng if seed is None else np.random.default_rng(seed)
+
+        generator_name = self._generator_name
+        generator_params = self._generator_params or {}
+        if generator_name == "markov_chain_crest":
+            if self.num_persons > MAX_CALIBRATED_SIZE:
+                warnings.warn(
+                    "markov_chain_crest has real CREST transition data "
+                    f"only for household sizes 1-{MAX_CALIBRATED_SIZE}; "
+                    f"num_persons={self.num_persons} falls back to the "
+                    "synthesized 'markov_chain' generator instead.",
+                    stacklevel=2,
+                )
+                generator_name = "markov_chain"
+            else:
+                generator_params = resolve_markov_chain_crest_params(
+                    self.num_persons, generator_params
+                )
+
         ctx = OccupancyGenerationContext(
             size=self.num_persons,
             index=self._index,
@@ -99,9 +137,9 @@ class HouseholdProfile:
             active_probabilities=self.active_probabilities,
             asleep_probabilities=self.asleep_probabilities,
             rng=rng,
-            params=self._generator_params or {},
+            params=generator_params,
         )
-        strategy = get_generator(self._generator_name)
+        strategy = get_generator(generator_name)
         self._profile = strategy(ctx)
         return self._profile
 

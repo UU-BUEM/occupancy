@@ -79,23 +79,14 @@ def _gate_mask(
     return mask, percent_active
 
 
-def probabilistic_event(
+def _event_probability(
     spec: EquipmentSpec, ctx: EquipmentContext
-) -> np.ndarray:
-    """Generalized "fires with some hourly probability" trigger, covering
-    what were previously bespoke tv/cooking/laundry/cleaning methods.
-
-    ``strategy_params``:
-    - ``gate``: ``"active"`` (default), ``"present"``, or ``"none"`` — which
-      occupancy count must be > 0 for the item to be eligible at all.
-    - ``activity_band``: optional ``[min, max]`` on active/present fraction.
-    - ``intercept`` / ``active_fraction_scale``: probability =
-      ``intercept + active_fraction_scale * percent_active``, or
-    - ``weekday_rate`` / ``weekend_rate``: flat base rate per day-type,
-      optionally bumped by ``day_bonus: [{"days": [2, 3], "amount": 0.05}]``.
-    Either base-rate mode is then multiplied by the spec's
-    ``weekday``/``weekend`` hourly weight array.
-    """
+) -> tuple[np.ndarray, np.ndarray]:
+    """Shared by :func:`probabilistic_event` and
+    :func:`expected_probabilistic_event`: the per-timestep firing
+    probability and gate mask, fully deterministic (no RNG use) given
+    ``spec``/``ctx`` — the only randomness in ``probabilistic_event`` is
+    the single Bernoulli draw made from this probability afterwards."""
     params = spec.strategy_params
     mask, percent_active = _gate_mask(spec, ctx)
 
@@ -116,6 +107,27 @@ def probabilistic_event(
 
     probability = np.clip(base_prob * _weight(spec, ctx), 0.0, 1.0)
     probability = np.where(mask, probability, 0.0)
+    return probability, mask
+
+
+def probabilistic_event(
+    spec: EquipmentSpec, ctx: EquipmentContext
+) -> np.ndarray:
+    """Generalized "fires with some hourly probability" trigger, covering
+    what were previously bespoke tv/cooking/laundry/cleaning methods.
+
+    ``strategy_params``:
+    - ``gate``: ``"active"`` (default), ``"present"``, or ``"none"`` — which
+      occupancy count must be > 0 for the item to be eligible at all.
+    - ``activity_band``: optional ``[min, max]`` on active/present fraction.
+    - ``intercept`` / ``active_fraction_scale``: probability =
+      ``intercept + active_fraction_scale * percent_active``, or
+    - ``weekday_rate`` / ``weekend_rate``: flat base rate per day-type,
+      optionally bumped by ``day_bonus: [{"days": [2, 3], "amount": 0.05}]``.
+    Either base-rate mode is then multiplied by the spec's
+    ``weekday``/``weekend`` hourly weight array.
+    """
+    probability, mask = _event_probability(spec, ctx)
 
     events = ctx.rng.binomial(1, probability)
     power = np.full(len(probability), spec.standby_power_kw, dtype=float)
@@ -129,17 +141,28 @@ def flat_always_on(spec: EquipmentSpec, ctx: EquipmentContext) -> np.ndarray:
     return np.full(len(ctx.profile), spec.rated_power_kw, dtype=float)
 
 
+def _session_placement(
+    spec: EquipmentSpec, ctx: EquipmentContext
+) -> tuple[np.ndarray, int]:
+    """Shared by :func:`sessions_per_week` and
+    :func:`expected_sessions_per_week`: the eligible (``n_active > 0``)
+    hour indices and the deterministic session count (only the
+    *placement* among eligible hours is randomized, via
+    ``ctx.rng.choice(..., replace=False)`` in ``sessions_per_week``)."""
+    n_active = ctx.profile["n_active"].to_numpy()
+    possible_hours = np.where(n_active > 0)[0]
+    sessions_per_wk = spec.strategy_params.get("sessions_per_week", 1)
+    n_sessions = int(len(ctx.profile) / (24 * 7) * sessions_per_wk)
+    return possible_hours, n_sessions
+
+
 def sessions_per_week(
     spec: EquipmentSpec, ctx: EquipmentContext
 ) -> np.ndarray:
     """Fires a fixed number of sessions per week at random active hours
     (e.g. ironing)."""
     power = np.zeros(len(ctx.profile), dtype=float)
-    n_active = ctx.profile["n_active"].to_numpy()
-    possible_hours = np.where(n_active > 0)[0]
-
-    sessions_per_wk = spec.strategy_params.get("sessions_per_week", 1)
-    n_sessions = int(len(ctx.profile) / (24 * 7) * sessions_per_wk)
+    possible_hours, n_sessions = _session_placement(spec, ctx)
     if len(possible_hours) > 0 and n_sessions > 0:
         chosen = ctx.rng.choice(
             possible_hours,
@@ -185,6 +208,77 @@ def get_strategy(name: str) -> StrategyFn:
         ) from exc
 
 
+def expected_probabilistic_event(
+    spec: EquipmentSpec, ctx: EquipmentContext
+) -> np.ndarray:
+    """Deterministic expected value of :func:`probabilistic_event`:
+    ``E[power_t] = mask_t * (standby_power_kw + probability_t *
+    (rated_power_kw - standby_power_kw))``. Used for load disaggregation
+    (:func:`occupancy.core.disaggregation.estimate_equipment_usage`) as a
+    basis-vector template — computed from the same deterministic
+    probability array ``probabilistic_event`` itself derives before making
+    its one Bernoulli draw, so no simulation is needed."""
+    probability, mask = _event_probability(spec, ctx)
+    power = np.full(len(probability), spec.standby_power_kw, dtype=float)
+    power[mask] = spec.standby_power_kw + probability[mask] * (
+        spec.rated_power_kw - spec.standby_power_kw
+    )
+    power[~mask] = 0.0
+    return power
+
+
+def expected_sessions_per_week(
+    spec: EquipmentSpec, ctx: EquipmentContext
+) -> np.ndarray:
+    """Deterministic expected value of :func:`sessions_per_week`: by
+    symmetry of sampling ``n_sessions`` slots uniformly without replacement
+    from the eligible (``n_active > 0``) hours, each eligible slot's
+    marginal probability of being chosen is ``n_sessions /
+    N_eligible_slots``, so ``E[power_t] = rated_power_kw * n_sessions /
+    N_eligible`` on eligible slots, ``0`` elsewhere. This is a valid
+    marginal expectation but discards the real placement's clustering/
+    spacing — see :func:`occupancy.core.disaggregation.estimate_equipment_usage`
+    docstring for the caveat this implies for disaggregation results built
+    from it."""
+    power = np.zeros(len(ctx.profile), dtype=float)
+    possible_hours, n_sessions = _session_placement(spec, ctx)
+    n_eligible = len(possible_hours)
+    if n_eligible > 0 and n_sessions > 0:
+        power[possible_hours] = (
+            spec.rated_power_kw * min(n_sessions, n_eligible) / n_eligible
+        )
+    return power
+
+
+ExpectedValueFn = Callable[[EquipmentSpec, EquipmentContext], np.ndarray]
+
+_EXPECTED_VALUE_STRATEGIES: dict[str, ExpectedValueFn] = {
+    "flat_always_on": flat_always_on,
+    "linear_in_occupants": linear_in_occupants,
+    "probabilistic_event": expected_probabilistic_event,
+    "sessions_per_week": expected_sessions_per_week,
+}
+
+
+def register_expected_value_strategy(name: str, fn: ExpectedValueFn) -> None:
+    """Register a deterministic expected-value counterpart for a trigger
+    strategy under ``name`` (see :func:`register_strategy`) — needed only
+    by callers building a basis template without simulating, e.g.
+    :func:`occupancy.core.disaggregation.estimate_equipment_usage`."""
+    _EXPECTED_VALUE_STRATEGIES[name] = fn
+
+
+def get_expected_value_strategy(name: str) -> ExpectedValueFn:
+    try:
+        return _EXPECTED_VALUE_STRATEGIES[name]
+    except KeyError as exc:
+        raise ValueError(
+            f"No expected-value strategy registered for equipment "
+            f"strategy {name!r}. Registered: "
+            f"{sorted(_EXPECTED_VALUE_STRATEGIES)}"
+        ) from exc
+
+
 def normalize_equipment_table(
     data: dict[str, Any],
 ) -> dict[str, EquipmentSpec]:
@@ -212,8 +306,21 @@ def generate_equipment_power(
     specs: list[EquipmentSpec],
     profile: pd.DataFrame,
     rng: np.random.Generator,
+    *,
+    category_totals: dict[str, np.ndarray] | None = None,
 ) -> pd.Series:
-    """Sum the power draw of every enabled spec over ``profile``'s index."""
+    """Sum the power draw of every enabled spec over ``profile``'s index.
+
+    ``category_totals``, if given, is populated in place with each spec's
+    ``category`` (e.g. ``"kitchen"``) mapped to the summed power series of
+    every enabled spec in that category -- accumulated from the exact same
+    per-spec draws used for the returned total, so a category subtotal
+    (e.g. household/building callers deriving a ``cooking_active`` signal
+    from the ``"kitchen"`` category) stays internally consistent with
+    ``total_power_kwh`` rather than requiring a second, independently
+    seeded pass over the same specs. Backward compatible: omitting it
+    changes nothing about the returned series or the RNG draw sequence.
+    """
     ctx = EquipmentContext(
         profile=profile,
         rng=rng,
@@ -226,5 +333,10 @@ def generate_equipment_power(
         if not spec.enabled:
             continue
         strategy = get_strategy(spec.strategy)
-        total += strategy(spec, ctx)
+        power = strategy(spec, ctx)
+        total += power
+        if category_totals is not None:
+            if spec.category not in category_totals:
+                category_totals[spec.category] = np.zeros(len(profile))
+            category_totals[spec.category] += power
     return pd.Series(total, index=profile.index, name="total_power_kwh")

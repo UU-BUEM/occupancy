@@ -1,12 +1,17 @@
+import warnings
+
 import pytest
 
 import occupancy
 from occupancy.households import (
+    EQUIPMENT_TYPES,
     HOUSEHOLD_ARCHETYPES,
     ElectricityConsumptionProfile,
     HouseholdProfile,
     get_archetype,
 )
+from occupancy.households.crest_tpm import MAX_CALIBRATED_SIZE
+from occupancy.households.electricity import default_equipment_table
 
 
 def test_generic_archetype_shape_and_columns() -> None:
@@ -61,8 +66,33 @@ def test_unknown_archetype_raises() -> None:
         HouseholdProfile(num_persons=2, year=2025, archetype="does_not_exist")
 
 
-def test_working_couple_uses_markov_chain_generator() -> None:
-    assert get_archetype("working_couple").generator == "markov_chain"
+def test_working_couple_uses_crest_calibrated_markov_chain_generator() -> None:
+    assert get_archetype("working_couple").generator == "markov_chain_crest"
+
+
+def test_working_couple_generates_valid_profile() -> None:
+    profile = HouseholdProfile(
+        num_persons=2, year=2025, archetype="working_couple", seed=1
+    ).get_profile()
+    assert (profile["n_active"] <= profile["n_present"]).all()
+    assert (profile["n_present"] <= 2).all()
+
+
+def test_working_couple_above_calibrated_size_warns_and_falls_back() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        profile = HouseholdProfile(
+            num_persons=MAX_CALIBRATED_SIZE + 2,
+            year=2025,
+            archetype="working_couple",
+            seed=1,
+        ).get_profile()
+    assert any(
+        "markov_chain_crest" in str(w.message)
+        and "markov_chain" in str(w.message)
+        for w in caught
+    )
+    assert (profile["n_present"] <= MAX_CALIBRATED_SIZE + 2).all()
 
 
 def test_electricity_profile_has_total_power() -> None:
@@ -185,3 +215,60 @@ def test_top_level_backward_compat_aliases() -> None:
         num_persons=2, year=2025, seed=1
     ).get_profile()
     assert "n_present" in profile.columns
+
+
+def test_equipment_types_top_level_export() -> None:
+    """occupancy.EQUIPMENT_TYPES mirrors SERVICE_BUILDING_TYPES's promotion
+    (buem's occupancy_module_activities.md item 1) -- a stable registry a
+    downstream consumer can validate/enumerate against without reaching
+    into the deep households.electricity module path."""
+    assert occupancy.EQUIPMENT_TYPES is EQUIPMENT_TYPES
+    assert set(EQUIPMENT_TYPES) == set(default_equipment_table())
+    assert len(EQUIPMENT_TYPES) == 29
+    assert EQUIPMENT_TYPES["hob"].category == "kitchen"
+
+
+def test_default_seed_is_deterministic_across_constructions() -> None:
+    """seed=None (the default) no longer draws from OS entropy -- two
+    otherwise-identical constructions must produce byte-identical seeds and
+    profiles (buem's occupancy_gains_handoff.md "Seed ownership" ask)."""
+    kwargs = dict(num_persons=3, year=2025, archetype="generic", region="NL")
+    first = HouseholdProfile(**kwargs)
+    second = HouseholdProfile(**kwargs)
+
+    assert first.seed is not None
+    assert first.seed == second.seed
+    pd_testing_equal = first.get_profile().equals(second.get_profile())
+    assert pd_testing_equal
+
+
+def test_default_seed_varies_with_construction_inputs() -> None:
+    """Different households (by size here) must not collide onto the same
+    default seed -- the portfolio-diversity property the previous
+    single-shared-constant stopgap lacked."""
+    seed_a = HouseholdProfile(num_persons=2, year=2025).seed
+    seed_b = HouseholdProfile(num_persons=5, year=2025).seed
+    assert seed_a != seed_b
+
+
+def test_explicit_seed_still_overrides_the_default() -> None:
+    explicit = HouseholdProfile(num_persons=3, year=2025, seed=7)
+    assert explicit.seed == 7
+
+
+def test_cooking_active_reflects_kitchen_equipment() -> None:
+    household = HouseholdProfile(num_persons=3, year=2025, seed=1)
+    profile = ElectricityConsumptionProfile(
+        occupancy_profile=household, seed=1
+    ).get_profile()
+
+    assert profile["cooking_active"].dtype == bool
+    # Over a full year with cooking enabled (default), some hour should show
+    # kitchen equipment active.
+    assert profile["cooking_active"].any()
+
+    no_cooking_household = HouseholdProfile(num_persons=3, year=2025, seed=1)
+    no_cooking_profile = ElectricityConsumptionProfile(
+        occupancy_profile=no_cooking_household, seed=1, has_cooking=False
+    ).get_profile()
+    assert not no_cooking_profile["cooking_active"].any()
