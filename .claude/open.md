@@ -14,11 +14,17 @@ items: `services/open.md`.
 
 ## cross-repo
 - [dhw-cooking] **buem's DHW + gas-cooking heat-demand ask (2026-08-17,
-  implemented 2026-08-18)** — full literature review, sourcing, and
-  design docs now live in `docs/dhw/` (see its `README.md`) and
-  `docs/buem_engine_reference.md`, not `.claude/` (moved there per the
-  user's explicit request; `residential/dhw_cooking_literature_review.md`
-  is now just a pointer). Status of buem's three original asks:
+  implemented 2026-08-18)** — docs are split by audience, not bundled:
+  `residential/dhw_cooking_literature_review.md` holds the literature
+  review and research trail (papers read, questions asked/answered along
+  the way) as internal working notes, kept out of `docs/` on the user's
+  explicit instruction ("These are internal discussions between claude
+  agents and should never be a part of the external/official docs
+  folder"); `docs/dhw/design.md` and `docs/buem_engine_reference.md` hold
+  the official technical documentation (API, CSV schema, every
+  deterministic value, buem's actual engine internals) — the only pieces
+  of this work that belong in `docs/`. Status of buem's three original
+  asks:
   - **Item 1** (CREST hot-water-fixture-derived liters output) —
     **implemented as a first pass**: `occupancy.generate_dhw_draws()`
     (`households/dhw.py`) + the editable, self-consistency-checked
@@ -37,9 +43,10 @@ items: `services/open.md`.
     pass.
   - **Item 3** (NTA 8800 cross-check) — still unstarted/lower-priority;
     two more pointer pages checked 2026-08-18
-    (`docs/dhw/sources_reviewed.md`'s NTA 8800 section) without
-    surfacing the actual numbers — the base standard remains a paid NEN
-    publication with no free full-text mirror found across two sessions.
+    (`residential/dhw_cooking_literature_review.md`'s NTA 8800 section)
+    without surfacing the actual numbers — the base standard remains a
+    paid NEN publication with no free full-text mirror found across two
+    sessions.
 - [pylovo/multi-profile] **Idea, not started (2026-07-31)** — two possible
   future directions raised for occupancy's elecLoad output interacting
   with more than one profile at a time, neither finalized/scoped:

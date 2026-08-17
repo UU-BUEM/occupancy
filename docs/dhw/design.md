@@ -2,13 +2,15 @@
 
 What `households/dhw.py` implements, why, and every deterministic value it
 depends on — collected in tables so each one can be checked, argued with,
-and replaced independently. See `docs/dhw/sources_reviewed.md` for the
-citation trail and `docs/dhw/questions_answered.md` for the reasoning that
-led here.
+and replaced independently. The literature review and research trail
+behind this design (papers reviewed, questions asked and answered along
+the way) live in `.claude/residential/dhw_cooking_literature_review.md`,
+not here — this document is the technical reference for what was
+actually built.
 
 ## What was built
 
-`occupancy.generate_dhw_draws(profile, rng, *, num_persons, cooking_active=None, tapping_categories=None)`
+`occupancy.generate_dhw_draws(profile, *, num_persons, cooking_active=None, tapping_categories=None, seed=None)`
 — a standalone, opt-in function (not wired into `HouseholdProfile.generate()`,
 `ElectricityConsumptionProfile.generate()`, or `to_buem_profiles()`; the
 user's own directive: *"DHW was never supposed to be integrated into the
@@ -18,8 +20,10 @@ liters output available, not to wire it downstream). Returns one
 `dhw_liters_<fixture_label>` column per tapping category plus a summed
 `dhw_liters_total`, aligned to the caller's hourly profile index.
 
-**Liters only, never kWh** — see `docs/dhw/questions_answered.md` §3 and
-`docs/buem_engine_reference.md` for why that line is drawn where it is.
+**Liters only, never kWh** — see `docs/buem_engine_reference.md` for why
+that line is drawn where it is (nowhere in buem's 5R1C solve today; a
+future DHW energy term would need a delivery-temperature assumption that
+belongs on buem's side of the ownership boundary, not here).
 
 ## Single point of configuration
 
@@ -29,9 +33,12 @@ flow rates, durations, reference event frequencies, and the reference
 household size they're all calibrated to. Changing one row's numbers, or
 adding an entirely new row (a new fixture, a new `activity_link`), needs
 no matching Python or JSON edit; `load_tapping_categories()` picks it up
-on the next call.
+on the next call. `scripts/extract_dhw_tapping_categories.py` regenerates
+this file from the source workbook (see below) — the CSV itself stays
+directly user-editable afterward; re-run the script only to reset to the
+source-derived defaults or to extract a different apportionment scheme.
 
-Two design choices keep it that way:
+Three design choices keep it that way:
 
 - **`volume_per_event_l` is not a stored column.** It is derived on load
   as `flow_rate_l_per_min × duration_min`. A volume that lived in its own
@@ -51,6 +58,11 @@ Two design choices keep it that way:
   in the module itself (`households/dhw.py`), not duplicated in
   `tests/test_dhw.py` — the tests only assert that a deliberately-broken
   table *does* raise, they don't re-implement the check.
+- **Randomization is owned internally, not passed in raw.** `seed=`
+  accepts an int, an `np.random.Generator`, or `None` (a deterministic
+  default derived from the call's own inputs) — see "Randomization"
+  below. A caller never needs to reach into a household's private RNG
+  state or construct a `Generator` itself.
 
 ## The tapping-category reference table
 
@@ -69,20 +81,20 @@ is not itself stored in the file):
 this table used Jordan & Vajen's (2005) DHWcalc reference figures
 (German, IEA SHC Task 26 example) for everything, with no ownership model
 and a household-size scaling shortcut standing in for it. This version
-replaces those numbers with real, first-party data read directly from
+replaces those numbers with real, first-party data extracted from
 McKenna & Thomson's (2016) own CREST integrated thermal-electrical model
-— specifically `CREST_Demand_Model_v2.3.3.xlsm`'s `AppliancesAndWater
-Fixtures` (rows 46–53) and `WaterUsage` sheets, located this session in
-the user's own local reading-materials archive (see `docs/dhw/
-sources_reviewed.md`) — the same kind of runtime workbook this repo
-already extracts from for the electricity-only CREST 1.0e model
-(`households/crest_tpm.py`'s precedent). That workbook's own header cites
-Clarke, Grant & Thornton (2009) as *its* source for the flow-rate/
-duration/ownership numbers. DHWcalc is still cited and kept as a
-secondary cross-check (see the apportionment note below) — the two
-sources are complementary, not competing: one UK, one German, neither
-Dutch, both genuine European research baselines. See "Keeping this
-generic, not Dutch-specific" below.
+workbook — `data/inputs/CREST_Demand_Model_v2.3.3.xlsm`'s
+`AppliancesAndWaterFixtures` (rows 46–53) and `WaterUsage` sheets, the
+same kind of runtime workbook this repo already extracts from for the
+electricity-only CREST 1.0e model (`households/crest_tpm.py`'s
+precedent) — via `scripts/extract_dhw_tapping_categories.py`, a
+reproducible extraction script, not a one-off manual read. That
+workbook's own header cites Clarke, Grant & Thornton (2009) as *its*
+source for the flow-rate/duration/ownership numbers. DHWcalc is still
+cited and kept as a secondary cross-check (see the apportionment note
+below) — the two sources are complementary, not competing: one UK, one
+German, neither Dutch, both genuine European research baselines. See
+"Keeping this generic, not Dutch-specific" below.
 
 **Ownership is now real, not a scaling shortcut.** `ownership_probability`
 is read directly off the workbook's own "Proportion of dwellings with
@@ -90,18 +102,15 @@ appliance" column — basins and kitchen sinks are near-universal;
 showers (0.997) and baths (0.916) are not. `generate_dhw_draws()` draws a
 Bernoulli outcome per fixture per call; a household that doesn't own a
 bath draws zero from it, every time — this directly replaces the first
-draft's "scale the whole table by household size" workaround (previously
-flagged as open item #1) with the real mechanism the source model itself
-uses.
+draft's "scale the whole table by household size" workaround with the
+real mechanism the source model itself uses.
 
 **Volume per event is now stochastic, not deterministic.** Each draw's
 volume is a Poisson sample centred on the row's derived mean
 (`volume_per_event_l`) rather than that exact fixed number every time —
 matching the source workbook's own `WaterUsage` sheet, which carries a
 Poisson probability-mass table for exactly this purpose (inspected
-directly this session). This replaces the first draft's flagged
-simplification (open item #3: "no per-draw jitter") with the real
-distribution shape the source model uses, not an invented one.
+directly, not assumed).
 
 **`reference_num_persons = 1` is now a fact, not a guess.** The first
 draft's `REFERENCE_NUM_PERSONS = 4` was an explicitly-flagged assumption
@@ -125,7 +134,7 @@ is not — it is a documented apportionment, not hidden inside the numbers:
    stochastic switch-on mechanism (shared "activity probability" values
    across basin/shower/bath, further split by which specific fixture a
    washing-and-dressing event uses) is not reachable without decompiling
-   its VBA macros — out of scope this session.
+   its VBA macros.
 3. So the split uses DHWcalc's (Jordan & Vajen 2005) own published
    relative category shares — 14% / 36% / 40% / 10% for
    basin / kitchen_sink / shower / bath — applied to the CREST total, not
@@ -151,8 +160,7 @@ is plausible that a single-occupant household's per-capita DHW use is
 higher than a multi-person household's average (fixed per-use volumes —
 one bath fill is one bath fill — don't shrink per person the way they
 might dilute across a larger household), not a sign either number is
-wrong. Kept here as an honest data point, not resolved further this
-session.
+wrong. Kept here as an honest data point, not resolved further.
 
 ## Timing: two registered envelopes, not a single flat average
 
@@ -190,33 +198,62 @@ equals a real measured washing-and-dressing activity curve. Listed below
 as the one item that would still benefit from a genuinely sourced
 replacement.
 
+## Randomization: owned internally via `seed=`
+
+`generate_dhw_draws()` never requires a caller to construct or manage a
+raw `np.random.Generator` — `seed=` follows exactly the same convention
+`HouseholdProfile`/`ServiceBuildingProfile` already use:
+
+- `seed=None` (the default): a deterministic seed is derived from
+  `num_persons` and the profile's own year via
+  `occupancy.core.seed.derive_default_seed` (`kind="dhw"`, distinct from
+  any `HouseholdProfile`'s own default seed, so calling this on a
+  household's profile does not replay the same bit-stream that
+  household's own generation already consumed). Same inputs always
+  reproduce the same DHW draws.
+- `seed=<int>`: used directly, same convention as every other explicit
+  `seed=` in this repo. A caller that already has a `HouseholdProfile`
+  can pass `seed=household.seed` — a fully public attribute — to tie
+  a household's DHW draws to it, with no private-attribute access
+  required.
+- `seed=<np.random.Generator>`: used as-is, an escape hatch for tests or
+  callers managing their own generator lifecycle.
+
+This replaced an earlier design where the function took a required
+positional `rng: np.random.Generator` argument — workable, but it forced
+a caller (e.g. buem) to either reach into a household's private `_rng`
+attribute (no documented public contract) or construct a fresh
+`np.random.default_rng(household.seed)`, which restarts from the exact
+same seed the household's own generation already consumed, risking
+correlated (non-independent) draws. Owning the randomization internally,
+the same way the rest of this package already does, removed the need for
+either workaround.
+
 ## Keeping this generic, not Dutch-specific
 
 Both sources this table draws on are UK/German research, not Dutch — this
 was a deliberate choice, not an oversight: NTA 8800 (the Dutch-specific
 standard this work was originally asked to cross-check) turned out to be
 a paid publication with no accessible DHW default figures after two
-sessions and four access attempts (`docs/dhw/sources_reviewed.md`), while
-DHWcalc and the CREST/Clarke data are both freely-verifiable Western-
-European baselines suitable as a generic starting point for the
-Netherlands, Germany, Austria, and Czech Republic alike — none of the
-mechanics here (ownership gating, Poisson event/volume draws, transition-
-weighted timing) are Dutch-specific in any way. If a specific region ever
-needs its own defaults (a different bathing-frequency culture, a
-different fixture mix), the extension path is the same one this repo
-already uses for archetypes and building types (`CLAUDE.md`): add a
-sibling file, e.g. `dhw_tapping_categories_DE.csv`, rather than editing
-this one in place — `generate_dhw_draws()`'s `tapping_categories=`
-parameter already accepts any validated table, so wiring in a
-region-specific variant needs no code change either.
+sessions and four access attempts, while DHWcalc and the CREST/Clarke
+data are both freely-verifiable Western-European baselines suitable as a
+generic starting point for the Netherlands, Germany, Austria, and Czech
+Republic alike — none of the mechanics here (ownership gating, Poisson
+event/volume draws, transition-weighted timing) are Dutch-specific in
+any way. If a specific region ever needs its own defaults (a different
+bathing-frequency culture, a different fixture mix), the extension path
+is the same one this repo already uses for archetypes and building types
+(`CLAUDE.md`): add a sibling file, e.g. `dhw_tapping_categories_DE.csv`,
+rather than editing this one in place — `generate_dhw_draws()`'s
+`tapping_categories=` parameter already accepts any validated table, so
+wiring in a region-specific variant needs no code change either.
 
 ## Open items — needs a decision or a document before further refinement
 
 1. **`events_per_day_reference` is a hybrid apportionment** (CREST total
    × DHWcalc shares), not a pure single-source read — see above. The
-   highest-value fix is obtaining McKenna & Thomson's own 2015 downloadable
-   workbook release notes or a direct per-fixture daily-volume breakdown,
-   if one exists outside the VBA macros.
+   highest-value fix is a direct per-fixture daily-volume breakdown, if
+   one exists outside the source workbook's VBA macros.
 2. **basin/shower/bath timing** uses the transition-weighted `n_active`
    proxy (above), not a real washing-and-dressing activity curve. A
    genuine `Act_WashDress`-equivalent extraction (if a source ever
@@ -232,26 +269,10 @@ region-specific variant needs no code change either.
    "Keeping this generic" above).
 5. **Ownership is re-resolved on every `generate_dhw_draws()` call**, not
    cached per household. Calling it twice for the "same" household with
-   two different `rng` states can produce different ownership outcomes
-   (e.g. a bath appearing in one year's run and not another's) — a real
-   characteristic of this stateless, functional design, not a bug, but
-   worth knowing if a caller wants ownership held constant across
-   multiple calls (pass the same seeded generator state).
-
-## For the user: documents worth chasing next
-
-In descending order of expected value:
-
-1. **McKenna & Thomson's 2015 downloadable workbook release page** (DOI:
-   10.17028/rd.lboro.2001129) or any accompanying documentation — would
-   help resolve open item #1 (the per-fixture event-count apportionment)
-   with a direct source instead of the DHWcalc-shares hybrid.
-2. **Pullinger et al. (2013)** "Patterns of water" — the CREST workbook's
-   ownership numbers may or may not trace back to this source; obtaining
-   it would let this repo confirm or correct the ownership figures
-   directly rather than trusting the workbook's own (unfootnoted at the
-   per-row level) numbers.
-3. **Energy Saving Trust (2008)** — primary-source version of the
-   122.4 L/day/dwelling UK figure used in the plausibility cross-check.
-4. **NTA 8800:2019-06 or 2025+C1:2026** (nen.nl) — a paid standard; only
-   worth pursuing if the Dutch-specific cross-check becomes load-bearing.
+   two different `seed=` values (or `seed=None`'s own derived default,
+   which is stable per call but not tied to a specific household
+   identity) can produce different ownership outcomes (e.g. a bath
+   appearing in one run and not another) — a real characteristic of this
+   stateless, functional design, not a bug, but worth knowing if a
+   caller wants ownership held constant across multiple calls (pass the
+   same explicit `seed=`).
