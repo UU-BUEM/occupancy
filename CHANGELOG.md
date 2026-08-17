@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-08-18
+
+### Changed
+
+- **Breaking**: `generate_dhw_draws()`'s required positional `rng:
+  np.random.Generator` argument is replaced by a keyword-only `seed: int
+  | np.random.Generator | None = None`, matching `HouseholdProfile`/
+  `ServiceBuildingProfile`'s own `seed=` convention. `seed=None` derives a
+  deterministic default via `core/seed.py::derive_default_seed`
+  (`kind="dhw"`, distinct from any household's own default seed); an
+  `int` is used directly; a pre-built `np.random.Generator` still works
+  as an escape hatch. Removes the only way to call this function that
+  required either reaching into a household's private `_rng` attribute
+  or restarting a fresh generator from a household's own seed (risking
+  correlated, non-independent draws) — a caller can now do
+  `generate_dhw_draws(profile, num_persons=..., seed=household.seed)`
+  using only public API. See `docs/dhw/design.md`'s "Randomization"
+  section.
+
+### Added
+
+- `scripts/extract_dhw_tapping_categories.py` — reproducible extraction
+  of `households/data/dhw_tapping_categories.csv` from
+  `data/inputs/CREST_Demand_Model_v2.3.3.xlsm`, mirroring
+  `scripts/extract_crest_tpm.py`'s established pattern. Regenerating the
+  CSV from this script (rather than the one-off manual read `v4.0.0`
+  shipped with) gives full floating-point precision and a byte-for-byte
+  reproducible provenance path; the CSV itself remains directly
+  user-editable afterward.
+
+### Docs
+
+- Literature review and research trail for the DHW work moved from
+  `docs/dhw/` back to `.claude/residential/dhw_cooking_literature_review.md`
+  — internal research notes, not official user-facing documentation, per
+  explicit user direction. `docs/dhw/` now holds only `design.md` (the
+  technical reference for what was built) and its `README.md`.
+
 ## [4.0.0] - 2026-08-18
 
 ### Added
