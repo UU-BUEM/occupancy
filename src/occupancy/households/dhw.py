@@ -73,6 +73,7 @@ import numpy as np
 import pandas as pd
 
 from occupancy.core.loader import load_csv_resource
+from occupancy.core.seed import derive_default_seed
 
 _TAPPING_CATEGORIES_PACKAGE = "occupancy.households"
 _TAPPING_CATEGORIES_RESOURCE = "data/dhw_tapping_categories.csv"
@@ -204,13 +205,26 @@ def load_tapping_categories() -> pd.DataFrame:
     return _prepare_tapping_categories(table)
 
 
+def _profile_year(profile: pd.DataFrame) -> int:
+    """Best-effort extraction of a representative year from ``profile``'s
+    index, for default-seed derivation only. Falls back to ``0`` (not an
+    error) if the index isn't datetime-like -- year is one of several
+    inputs distinguishing the derived default seed, not a hard
+    requirement of :func:`generate_dhw_draws`'s contract (which only
+    needs ``len(profile)``, not timestamp values, for anything else)."""
+    try:
+        return int(profile.index[0].year)
+    except AttributeError:
+        return 0
+
+
 def generate_dhw_draws(
     profile: pd.DataFrame,
-    rng: np.random.Generator,
     *,
     num_persons: int,
     cooking_active: pd.Series | None = None,
     tapping_categories: pd.DataFrame | None = None,
+    seed: int | np.random.Generator | None = None,
 ) -> pd.DataFrame:
     """Generate stochastic hourly DHW draw volumes in liters.
 
@@ -219,9 +233,8 @@ def generate_dhw_draws(
     ``dhw_liters_basin``, ``dhw_liters_kitchen_sink``,
     ``dhw_liters_shower``, ``dhw_liters_bath`` for the bundled default
     table) plus a summed ``dhw_liters_total`` column. A fixture a
-    household doesn't own (per the table's ``ownership_probability``,
-    stochastically resolved from ``rng``) contributes an all-zero column
-    for that run.
+    household doesn't own (per the table's ``ownership_probability``)
+    contributes an all-zero column for that run.
 
     Parameters
     ----------
@@ -231,15 +244,6 @@ def generate_dhw_draws(
         output, or the equivalent from
         ``ElectricityConsumptionProfile``). Length must be a whole
         number of days (8760 or 8784 for a full year).
-    rng:
-        The household's own seeded generator -- pass
-        ``household._rng`` (or any ``np.random.Generator``) so draws,
-        including fixture ownership, are reproducible under the same
-        seed, consistent with every other stochastic draw in this repo.
-        Ownership is re-resolved from ``rng`` on every call rather than
-        cached anywhere; pass the same seeded generator state across
-        calls for the same household if consistent ownership across
-        multiple runs (e.g. different years) matters to the caller.
     num_persons:
         Used to scale each owned category's reference daily event count
         relative to the tapping-category table's own
@@ -259,6 +263,29 @@ def generate_dhw_draws(
         edited row, or an entirely different reference dataset. Validated
         the same way as the bundled table. Defaults to loading the
         bundled CSV.
+    seed:
+        Owns this function's randomization the same way ``seed=`` already
+        works on ``HouseholdProfile``/``ServiceBuildingProfile`` -- a
+        caller never needs to construct or manage a raw
+        ``np.random.Generator`` itself. Three forms are accepted:
+
+        - ``None`` (the default): a deterministic seed is derived from
+          ``num_persons`` and ``profile``'s own year via
+          :func:`occupancy.core.seed.derive_default_seed` (``kind="dhw"``,
+          distinct from any ``HouseholdProfile``'s own default seed, so
+          calling this on a household's profile does not replay the same
+          bit-stream that household's own generation already consumed).
+          Same inputs always reproduce the same DHW draws; a caller
+          wanting a specific household's draws to also vary
+          independently across repeat calls should pass an explicit
+          ``seed=`` (e.g. offset from ``household.seed``).
+        - An ``int``: used directly via ``np.random.default_rng(seed)``,
+          the same convention as every other explicit ``seed=`` in this
+          repo.
+        - An ``np.random.Generator``: used as-is (advanced in place across
+          this call) -- an escape hatch for tests or callers who already
+          manage their own generator lifecycle; this repo's own test
+          suite uses this form.
     """
     if num_persons <= 0:
         raise ValueError(f"num_persons must be positive, got {num_persons}")
@@ -269,6 +296,19 @@ def generate_dhw_draws(
             f"is a whole number of days; got {num_hours} rows"
         )
     num_days = num_hours / 24
+
+    if isinstance(seed, np.random.Generator):
+        rng = seed
+    else:
+        if seed is None:
+            seed = derive_default_seed(
+                kind="dhw",
+                size=num_persons,
+                year=_profile_year(profile),
+                archetype="",
+                region="",
+            )
+        rng = np.random.default_rng(seed)
 
     if tapping_categories is None:
         tapping_categories = load_tapping_categories()

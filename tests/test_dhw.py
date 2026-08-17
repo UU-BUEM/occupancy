@@ -13,9 +13,9 @@ from occupancy.households.dhw import (
 
 
 def _hourly_profile(
-    hours: int = 24 * 7, n_active: float = 1.0
+    hours: int = 24 * 7, n_active: float = 1.0, year: int = 2025
 ) -> pd.DataFrame:
-    index = pd.date_range("2025-01-06", periods=hours, freq="h")  # a Monday
+    index = pd.date_range(f"{year}-01-06", periods=hours, freq="h")  # a Monday
     return pd.DataFrame({"n_active": np.full(hours, n_active)}, index=index)
 
 
@@ -64,8 +64,8 @@ def test_generate_dhw_draws_rejects_missing_columns() -> None:
     with pytest.raises(ValueError, match="missing required column"):
         generate_dhw_draws(
             profile,
-            np.random.default_rng(1),
             num_persons=1,
+            seed=1,
             tapping_categories=pd.DataFrame({"fixture_label": ["a"]}),
         )
 
@@ -85,10 +85,7 @@ def test_generate_dhw_draws_rejects_inconsistent_reference_num_persons() -> (
     )
     with pytest.raises(ValueError, match="reference_num_persons"):
         generate_dhw_draws(
-            profile,
-            np.random.default_rng(1),
-            num_persons=1,
-            tapping_categories=bad_table,
+            profile, num_persons=1, seed=1, tapping_categories=bad_table
         )
 
 
@@ -97,10 +94,7 @@ def test_generate_dhw_draws_rejects_out_of_range_ownership() -> None:
     bad_table = _custom_table(ownership_probability=[1.5])
     with pytest.raises(ValueError, match="ownership_probability"):
         generate_dhw_draws(
-            profile,
-            np.random.default_rng(1),
-            num_persons=1,
-            tapping_categories=bad_table,
+            profile, num_persons=1, seed=1, tapping_categories=bad_table
         )
 
 
@@ -111,17 +105,13 @@ def test_generate_dhw_draws_rejects_non_positive_flow_or_duration() -> None:
         ValueError, match="flow_rate_l_per_min and duration_min"
     ):
         generate_dhw_draws(
-            profile,
-            np.random.default_rng(1),
-            num_persons=1,
-            tapping_categories=bad_table,
+            profile, num_persons=1, seed=1, tapping_categories=bad_table
         )
 
 
 def test_generate_dhw_draws_columns_and_non_negativity() -> None:
     profile = _hourly_profile()
-    rng = np.random.default_rng(1)
-    result = generate_dhw_draws(profile, rng, num_persons=4)
+    result = generate_dhw_draws(profile, num_persons=4, seed=1)
 
     table = load_tapping_categories()
     expected_columns = {
@@ -137,11 +127,40 @@ def test_generate_dhw_draws_columns_and_non_negativity() -> None:
     )
 
 
-def test_generate_dhw_draws_is_deterministic_under_the_same_seed() -> None:
+def test_generate_dhw_draws_accepts_an_int_seed_or_an_equivalent_generator() -> (
+    None
+):
+    """The two documented explicit forms -- seed=<int> and
+    seed=np.random.default_rng(<same int>) -- must produce identical
+    output, since both resolve to the same fresh bit-generator state."""
     profile = _hourly_profile()
-    a = generate_dhw_draws(profile, np.random.default_rng(42), num_persons=3)
-    b = generate_dhw_draws(profile, np.random.default_rng(42), num_persons=3)
+    from_int = generate_dhw_draws(profile, num_persons=3, seed=42)
+    from_generator = generate_dhw_draws(
+        profile, num_persons=3, seed=np.random.default_rng(42)
+    )
+    pd.testing.assert_frame_equal(from_int, from_generator)
+
+
+def test_generate_dhw_draws_is_deterministic_under_the_same_int_seed() -> None:
+    profile = _hourly_profile()
+    a = generate_dhw_draws(profile, num_persons=3, seed=42)
+    b = generate_dhw_draws(profile, num_persons=3, seed=42)
     pd.testing.assert_frame_equal(a, b)
+
+
+def test_generate_dhw_draws_default_seed_is_deterministic_but_not_flat() -> (
+    None
+):
+    """seed=None (the default) must reproduce the same result for the same
+    inputs, and a different result when an input it hashes (num_persons)
+    changes -- exercising derive_default_seed's own contract end to end."""
+    profile = _hourly_profile()
+    a = generate_dhw_draws(profile, num_persons=2)
+    b = generate_dhw_draws(profile, num_persons=2)
+    pd.testing.assert_frame_equal(a, b)
+
+    c = generate_dhw_draws(profile, num_persons=5)
+    assert not a["dhw_liters_total"].equals(c["dhw_liters_total"])
 
 
 def test_generate_dhw_draws_respects_ownership_probability() -> None:
@@ -152,10 +171,7 @@ def test_generate_dhw_draws_respects_ownership_probability() -> None:
         ownership_probability=[0.0], events_per_day_reference=[100.0]
     )
     result = generate_dhw_draws(
-        profile,
-        np.random.default_rng(1),
-        num_persons=4,
-        tapping_categories=table,
+        profile, num_persons=4, seed=1, tapping_categories=table
     )
     assert (result["dhw_liters_widget"] == 0).all()
 
@@ -173,7 +189,7 @@ def test_generate_dhw_draws_scales_with_num_persons() -> None:
 
     def mean_total(num_persons: int, trials: int = 80) -> float:
         totals = [
-            generate_dhw_draws(profile, rng, num_persons=num_persons)[
+            generate_dhw_draws(profile, num_persons=num_persons, seed=rng)[
                 "dhw_liters_total"
             ].sum()
             for _ in range(trials)
@@ -193,9 +209,8 @@ def test_cooking_linked_category_follows_cooking_active_timing() -> None:
     cooking_active = pd.Series(False, index=profile.index)
     cooking_active.iloc[10] = True
 
-    rng = np.random.default_rng(3)
     result = generate_dhw_draws(
-        profile, rng, num_persons=6, cooking_active=cooking_active
+        profile, num_persons=6, cooking_active=cooking_active, seed=3
     )
 
     kitchen_sink = result["dhw_liters_kitchen_sink"]
@@ -242,17 +257,13 @@ def test_register_timing_envelope_is_used_for_a_custom_activity_link() -> None:
         activity_link=["test_custom_activity"], events_per_day_reference=[5.0]
     )
     generate_dhw_draws(
-        profile,
-        np.random.default_rng(1),
-        num_persons=1,
-        tapping_categories=table,
+        profile, num_persons=1, seed=1, tapping_categories=table
     )
     assert invoked
 
 
 def test_generate_dhw_draws_accepts_a_custom_tapping_table() -> None:
     profile = _hourly_profile()
-    rng = np.random.default_rng(1)
     custom = _custom_table(
         fixture_label=["outdoor_tap"],
         activity_link=["washing_and_dressing"],
@@ -260,7 +271,7 @@ def test_generate_dhw_draws_accepts_a_custom_tapping_table() -> None:
         duration_min=[2.0],
     )
     result = generate_dhw_draws(
-        profile, rng, num_persons=1, tapping_categories=custom
+        profile, num_persons=1, seed=1, tapping_categories=custom
     )
     assert set(result.columns) == {
         "dhw_liters_outdoor_tap",
@@ -272,22 +283,24 @@ def test_generate_dhw_draws_rejects_bad_num_persons_or_profile_length() -> (
     None
 ):
     profile = _hourly_profile()
-    rng = np.random.default_rng(1)
 
     with pytest.raises(ValueError, match="num_persons"):
-        generate_dhw_draws(profile, rng, num_persons=0)
+        generate_dhw_draws(profile, num_persons=0, seed=1)
 
     with pytest.raises(ValueError, match="whole number of days"):
-        generate_dhw_draws(profile.iloc[:-1], rng, num_persons=3)
+        generate_dhw_draws(profile.iloc[:-1], num_persons=3, seed=1)
 
 
 def test_generate_dhw_draws_works_against_a_real_household_profile() -> None:
     """End-to-end smoke test against HouseholdProfile.get_profile()'s real
-    n_active output, not a synthetic stand-in."""
+    n_active output. Deliberately does *not* touch the private
+    household._rng attribute -- passing the household's own public
+    .seed is the documented, supported way to tie a household to its DHW
+    draws (see generate_dhw_draws()'s own seed= docstring)."""
     household = HouseholdProfile(num_persons=3, year=2025, seed=1)
     profile = household.get_profile()
     result = generate_dhw_draws(
-        profile, household._rng, num_persons=household.num_persons
+        profile, num_persons=household.num_persons, seed=household.seed
     )
     assert len(result) == len(profile)
     assert result["dhw_liters_total"].sum() > 0
