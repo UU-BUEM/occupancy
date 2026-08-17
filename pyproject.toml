@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
   "numpy>=1.26",
   "pandas>=2.0",
+  "scipy>=1.11",
 ]
 
 [project.optional-dependencies]
@@ -47,7 +48,11 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "occupancy.config" = ["data/*.json"]
-"occupancy.households" = ["data/*.json", "data/archetypes/*.json"]
+"occupancy.households" = [
+    "data/*.json",
+    "data/*.csv",
+    "data/archetypes/*.json",
+]
 "occupancy.services_buildings" = ["data/*/*.json"]
 
 [tool.setuptools_scm]

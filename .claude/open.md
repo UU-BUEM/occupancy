@@ -13,6 +13,33 @@ items: `services/open.md`.
   registry key to become `(id, region)` if/when that's needed.
 
 ## cross-repo
+- [dhw-cooking] **buem's DHW + gas-cooking heat-demand ask (2026-08-17,
+  implemented 2026-08-18)** — full literature review, sourcing, and
+  design docs now live in `docs/dhw/` (see its `README.md`) and
+  `docs/buem_engine_reference.md`, not `.claude/` (moved there per the
+  user's explicit request; `residential/dhw_cooking_literature_review.md`
+  is now just a pointer). Status of buem's three original asks:
+  - **Item 1** (CREST hot-water-fixture-derived liters output) —
+    **implemented as a first pass**: `occupancy.generate_dhw_draws()`
+    (`households/dhw.py`) + the editable, self-consistency-checked
+    `households/data/dhw_tapping_categories.csv` (Jordan & Vajen 2005
+    DHWcalc reference values, scaled by household size). Liters only,
+    never kWh, and deliberately **not** wired into `to_buem_profiles()`
+    or any `.generate()` default output — the user's explicit
+    direction was that DHW isn't part of buem yet and won't be until
+    after buem's own follow-up update. Real open items (per-fixture
+    ownership sourcing, non-kitchen draw timing, service buildings) are
+    listed in `docs/dhw/design.md`.
+  - **Item 2** (separable `cooking_active` signal) — **done**, see
+    `CHANGELOG.md` `[Unreleased]`; also closed buem's
+    `occupancy_module_activities.md` item 1 (`EQUIPMENT_TYPES` export)
+    and `occupancy_gains_handoff.md`'s "Seed ownership" item in the same
+    pass.
+  - **Item 3** (NTA 8800 cross-check) — still unstarted/lower-priority;
+    two more pointer pages checked 2026-08-18
+    (`docs/dhw/sources_reviewed.md`'s NTA 8800 section) without
+    surfacing the actual numbers — the base standard remains a paid NEN
+    publication with no free full-text mirror found across two sessions.
 - [pylovo/multi-profile] **Idea, not started (2026-07-31)** — two possible
   future directions raised for occupancy's elecLoad output interacting
   with more than one profile at a time, neither finalized/scoped:
@@ -60,11 +87,12 @@ items: `services/open.md`.
   root.
 - [all] Public API (`OccupancyProfile`/`HouseholdProfile`/
   `ElectricityConsumptionProfile`/`OccupancyResult`/`ServiceBuildingProfile`/
-  `SERVICE_BUILDING_TYPES`, all re-exported from `occupancy/__init__.py`) is
-  the compatibility surface going forward — deep module paths are not
-  guaranteed stable. `SERVICE_BUILDING_TYPES` was promoted to this
-  top-level surface (2026-08-07) specifically so downstream consumers
-  (buem) can enumerate/validate registered service-building-type ids at
+  `SERVICE_BUILDING_TYPES`/`HOUSEHOLD_ARCHETYPES`/`EQUIPMENT_TYPES`, all
+  re-exported from `occupancy/__init__.py`) is the compatibility surface
+  going forward — deep module paths are not guaranteed stable.
+  `SERVICE_BUILDING_TYPES` was promoted to this top-level surface
+  (2026-08-07) specifically so downstream consumers (buem) can
+  enumerate/validate registered service-building-type ids at
   runtime (`sorted(occupancy.SERVICE_BUILDING_TYPES)`) instead of
   hand-copying the list into their own schema/enum, which was buem's
   `occupancy_gains_handoff.md` Gap 3 (registry duplication risk). Consuming

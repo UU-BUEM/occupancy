@@ -68,6 +68,44 @@ This is linked to the `UU-BUEM` organization and pushed to the repo
    git push origin vX.Y.Z
    ```
 
+   **Known gotcha (first hit 2026-08-10, `v3.1.0` push): plain `git push`
+   can hang indefinitely with no error output**, even after `gh auth
+   setup-git` has correctly rescoped `credential.https://github.com.helper`
+   away from the system-wide `credential.helper=manager` (Git Credential
+   Manager) — confirmed via `git config --list --show-origin`, the override
+   was in place and correct, yet the hang still happened, twice, on two
+   separate plain `git push origin <ref>` invocations (2-minute and 1-minute
+   timeouts both exhausted). Read-only remote operations
+   (`git ls-remote`, `git fetch`) and `gh auth status`/`gh auth token` all
+   returned fast and correctly in the same session — this is specific to
+   `push` (a write/auth-elevation operation), most likely GCM attempting an
+   interactive (browser/credential-prompt) flow that has nothing to
+   complete in this headless/background tool-execution context.
+   `GIT_TERMINAL_PROMPT=0` does **not** prevent this (that only suppresses
+   git's own prompts, not an external credential helper's UI).
+
+   **Workaround that worked**: bypass the credential helper entirely by
+   attaching an explicit `Authorization` header built from `gh`'s own
+   cached token, run from PowerShell (not the Bash tool — it was also
+   unreliable for git/gh commands in the same session, separately timing
+   out/erroring; PowerShell was reliable throughout):
+
+   ```powershell
+   $token = gh auth token
+   $b64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$token"))
+   git -c http.extraHeader="Authorization: Basic $b64" push origin main
+   git -c http.extraHeader="Authorization: Basic $b64" push origin vX.Y.Z
+   ```
+
+   Note: piping this through `2>&1` in PowerShell will wrap git's normal
+   stderr progress lines (e.g. `To https://github.com/...`) in a
+   `NativeCommandError` even on success (PowerShell 5.1 native-command
+   stderr quirk — see this environment's own PowerShell tool notes); check
+   the actual ref-update line (`<old>..<new>  main -> main` / `* [new tag]
+   vX.Y.Z -> vX.Y.Z`) rather than trusting the error categorization alone.
+   If this reproduces again, worth going straight to the token-header
+   approach instead of re-attempting/re-diagnosing plain `git push` first.
+
 7. **Monitor CI on GitHub** (`gh run list --branch main --limit 1`, then
    `gh run watch <run-id>`, or `gh run watch` on the latest run) until it
    completes. Report the result (pass/fail, and which step if it failed) —

@@ -4,6 +4,189 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-08-18
+
+### Added
+
+- `occupancy.generate_dhw_draws()` (new `households/dhw.py`) — stochastic
+  hourly domestic-hot-water draw volumes in **liters** (never kWh; see
+  `docs/buem_engine_reference.md` for why), one `dhw_liters_<fixture>`
+  column per tapping category (`basin`, `kitchen_sink`, `shower`, `bath`
+  by default) plus a summed `dhw_liters_total`. Answers buem's
+  `dhw_cooking_heat_handoff.md` ask #1. Every deterministic number this
+  model uses — fixture ownership rates, flow rates, durations, reference
+  event frequencies, and the reference household size they're calibrated
+  to — lives in exactly one editable file, `households/data/
+  dhw_tapping_categories.csv` (real values read directly from McKenna &
+  Thomson's (2016) own CREST runtime workbook, `CREST_Demand_Model_
+  v2.3.3.xlsm`; see `docs/dhw/design.md` for the full derivation,
+  including the one hybrid figure — `events_per_day_reference`, apportioned
+  from that workbook's own aggregate total using DHWcalc/Jordan & Vajen
+  (2005)'s relative category shares, honestly flagged as such); loaded
+  and validated (required columns, positive flow/duration, `[0, 1]`
+  ownership probabilities, one shared `reference_num_persons`) via a new
+  `core/loader.py::load_csv_resource` helper (mirrors
+  `load_json_resource`) and `households/dhw.py`'s own
+  `load_tapping_categories()`. Fixture **ownership** is now a real,
+  per-fixture, seeded stochastic draw (`ownership_probability`, sourced
+  from the same workbook) — a household without a bath draws zero from
+  it, every run — not a household-size scaling proxy. Event **counts**
+  are scaled by `num_persons / reference_num_persons` and drawn
+  stochastically (Poisson); per-event **volume** is also stochastic
+  (Poisson, centred on each fixture's derived mean), matching the source
+  workbook's own volume-distribution approach rather than a fixed
+  number every time. Event **timing** is resolved via a small
+  registry (`_TIMING_ENVELOPES` / `households.dhw.
+  register_timing_envelope()`, mirroring `core/equipment.py`'s
+  `register_strategy` pattern, so a custom tapping-category table can
+  introduce a new `activity_link` with real routed timing logic):
+  kitchen-sink draws follow the already-shipped `cooking_active` signal;
+  basin/shower/bath draws use a transition-weighted occupancy envelope
+  (`n_active` plus extra weight at the hours active occupancy changes,
+  i.e. waking/bedtime) rather than a flat average, reusing the same
+  "occupants becoming active/inactive" concept Richardson et al. (2008)
+  validate their own occupancy model against. Deliberately **not** wired
+  into `HouseholdProfile.generate()`, `ElectricityConsumptionProfile.
+  generate()`, or `to_buem_profiles()` — opt-in only (same pattern as
+  `estimate_equipment_usage()`), per explicit user direction that DHW
+  isn't part of buem yet and won't be until buem's own follow-up work.
+  Full literature review, source list, answers to the design questions
+  this was built around, and every deterministic value used (all in
+  reviewable tables) are in `docs/dhw/` — see its `README.md`.
+- New `docs/buem_engine_reference.md` — documents buem's 5R1C thermal
+  engine's actual internal-gains pathway and required-config contract
+  from occupancy's side (the reverse of what buem's own `.claude/
+  occupancy_module_activities.md` does for occupancy), including direct
+  confirmation, re-checked against buem's current code, that `q_w_nd`
+  (TABULA's DHW parameter) is carried through buem's data model but never
+  read by `ModelBUEM.sim_model()`, and where a future DHW energy term
+  would (additive, after the 5R1C solve) and would not (inside `Q_ia`)
+  plug in.
+- New `markov_chain_crest` occupancy-generation strategy
+  (`core/occupancy_engine.py`): active-occupant-count transitions drawn
+  from real CREST Domestic Electricity Demand Model 1.0e
+  transition-probability matrices (`tpm{1..5}_{wd,we}` sheets, indexed by
+  household size 1-5), hourly-composed from the source 10-minute-
+  resolution data via 6-step matrix multiplication
+  (`households/crest_tpm.py::compose_hourly_transition_matrix`), one
+  matrix per household size x weekday/weekend. New
+  `households/data/tpm_crest.json` (extraction documented and reproducible
+  via `scripts/extract_crest_tpm.py`, attribution matching the precedent
+  set by `households/data/equipment.json`) and `households/crest_tpm.py`
+  (loading/composition/resolution). Households with more than 5 residents
+  (`households/crest_tpm.py::MAX_CALIBRATED_SIZE`, CREST's own modeled
+  range) fall back to the existing synthesized `markov_chain` generator
+  with a `warnings.warn`. Only the active-occupant-count transition is
+  CREST-calibrated — presence-vs-active split and `n_asleep` are still
+  derived from this repo's own (illustrative) marginal arrays. Resolves
+  the `.claude/residential/open.md` "Source real regional TPM survey
+  data" NEXT MAJOR TASK.
+- `occupancy.estimate_equipment_usage()` (new `core/disaggregation.py`):
+  fits non-negative per-item equipment usage-intensity coefficients against
+  a supplied whole-building `elec_load` series via `scipy.optimize.nnls`
+  on closed-form deterministic expected-value templates (new
+  `expected_probabilistic_event`/`expected_sessions_per_week` counterparts
+  in `core/equipment.py`, alongside the already-deterministic
+  `flat_always_on`/`linear_in_occupants`, plus a new
+  `register_expected_value_strategy`/`get_expected_value_strategy`
+  registry mirroring `register_strategy`/`get_strategy`). Returns a
+  `dict[str, EquipmentSpec]` that slots directly into `equipment=` on
+  `ElectricityConsumptionProfile`/`ServiceBuildingProfile`. Answers buem's
+  long-deferred `occupancy_module_activities.md` item 3 ("investigate
+  profile-based equipment-usage-pattern inference"). Explicitly
+  illustrative/estimation-only, not a validated calibration (identifiability
+  is limited for collinear/similarly-shaped items; fits *expected-value*
+  templates, not the true per-draw stochastic signal) — see the function's
+  docstring for the full caveat. Does **not** change
+  `to_buem_profiles()`'s contract or `Q_ig` computation; it's a standalone
+  preprocessing step a caller opts into. New `scipy>=1.11` runtime
+  dependency (`pyproject.toml`, `infrastructure/env/occupancy_env.yml`,
+  `meta.yaml`) — already a `buem` dependency, so no new transitive cost for
+  that consumer.
+- `ServiceBuildingProfile.equipment: dict[str, EquipmentSpec] | None = None`
+  and a new `get_equipment_table()` method — per-item equipment inclusion/
+  exclusion for service buildings, mirroring
+  `ElectricityConsumptionProfile.equipment`/`get_equipment_table()` on the
+  household side exactly (`None` uses the building type's full default
+  table; a dict is used as-is, so any item id absent from it is fully
+  excluded). Resolves buem's `occupancy_module_activities.md` item 2
+  (`ServiceBuildingProfile` previously had only an all-or-nothing
+  `include_equipment: bool` switch, no way to select individual items).
+  `include_equipment=False` remains a separate master switch that omits
+  `total_power_kwh` entirely regardless of `equipment=`; `equipment={}`
+  with `include_equipment=True` keeps the column present but all-zero —
+  document this distinction where used. Pure parameter parity, no new
+  occupancy-side modeling concept.
+- `occupancy.HOUSEHOLD_ARCHETYPES` promoted to the top-level public API
+  (`occupancy/__init__.py`), mirroring `SERVICE_BUILDING_TYPES`'s promotion
+  in `[3.1.0]` (buem's `occupancy_gains_handoff.md` Gap 3). Fixes a public-
+  API asymmetry raised during a buem/occupancy review (2026-08-14):
+  `HOUSEHOLD_ARCHETYPES` was already the household-composition-registry
+  counterpart to `SERVICE_BUILDING_TYPES` (same `ArchetypeSpec`/
+  `ServiceBuildingTypeSpec` shape, same per-JSON-file loading pattern) but
+  was only reachable via the deep `occupancy.households` path. Downstream
+  consumers can now do `sorted(occupancy.HOUSEHOLD_ARCHETYPES)` to
+  enumerate/validate registered household-archetype ids at runtime instead
+  of hand-copying the list.
+- `occupancy.EQUIPMENT_TYPES` promoted to the top-level public API
+  (`occupancy/__init__.py`), mirroring `SERVICE_BUILDING_TYPES`'s/
+  `HOUSEHOLD_ARCHETYPES`'s promotion above — resolves buem's
+  `occupancy_module_activities.md` item 1 ("promote a top-level
+  household-equipment registry export"). The live `dict[str, EquipmentSpec]`
+  of the 29 registered household equipment ids (same object
+  `households.electricity.default_equipment_table()` copies from, so it
+  can't drift out of sync with a future `equipment.json` addition).
+  Downstream consumers (e.g. buem's `building.equipment` field validation)
+  can now do `set(occupancy.EQUIPMENT_TYPES)` instead of hand-copying the
+  29 ids into their own constant/schema enum.
+- Boolean `cooking_active` column on the generated occupancy profile
+  (`ElectricityConsumptionProfile`/`ServiceBuildingProfile`, wherever
+  equipment is generated), and a matching optional 5th key in
+  `to_buem_profiles()`'s returned dict when present. True whenever the
+  `"kitchen"` equipment category (hob/oven/microwave/kettle/
+  small_cooking_group for households; the equivalent items in restaurant/
+  bakery/school service-building types) is drawing above-standby power —
+  derived from the exact same per-item stochastic draws that already
+  produce `total_power_kwh` (new `category_totals=` param on
+  `core/equipment.py::generate_equipment_power`), not a second,
+  independently-seeded pass. Resolves buem's `dhw_cooking_heat_handoff.md`
+  ask #2 ("expose a separable cooking activity signal") — lets a future
+  gas-cooking-energy term be driven by real per-building cooking timing
+  instead of a flat national average. Reuses existing kitchen-equipment
+  generation; no new modeling capability or data source.
+
+### Changed
+
+- **Breaking**: `HouseholdProfile`/`ServiceBuildingProfile`'s `seed=None`
+  default no longer seeds from OS entropy — it now resolves to a
+  deterministic hash of the profile's own construction inputs (new
+  `core/seed.py::derive_default_seed`, hashing
+  `(building_type_or_"household", num_persons_or_capacity, year,
+  archetype, region)`), and that resolved value overwrites `self.seed` so
+  downstream consumers relying on it (e.g. `ElectricityConsumptionProfile`'s
+  `self.seed = self.occupancy_profile.seed` fallback and its ownership-draw
+  seed offset) inherit the same determinism automatically. Resolves the
+  "Seed ownership" item in buem's `occupancy_gains_handoff.md` (raised
+  2026-08-07, previously unimplemented): a caller no longer needs to pass
+  an explicit `seed=` for reproducibility, and — unlike buem's own
+  `DEFAULT_SEED = 42` stopgap this replaces the need for — different
+  buildings/households now get different (not identical) default draws.
+  Passing an explicit `seed=` is unaffected and still takes priority. Same
+  Alpha-package breaking-change posture as `markov_chain_crest` above:
+  accepted deliberately, numeric output for any caller currently relying on
+  `seed=None`'s old non-determinism (there shouldn't be any, by
+  definition) or on OS-entropy randomness changes.
+
+- **Breaking**: `working_couple` archetype's `generator` field changed
+  from `"markov_chain"` to `"markov_chain_crest"`
+  (`households/data/archetypes/working_couple.json`) — its numeric output
+  changes for the same seed vs. earlier releases, since it now draws real
+  CREST transition data instead of the synthesized persistence-blend
+  formula (see the `markov_chain_crest` `Added` entry above). Deliberately
+  accepted (package is Alpha; real data is strictly better). The original
+  `markov_chain` generator is unchanged and still registered/available for
+  any other caller/archetype.
+
 ## [3.1.0] - 2026-08-10
 
 ### Changed

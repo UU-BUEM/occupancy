@@ -1,22 +1,6 @@
 # Open issues / TODOs — households
 
 ## >>> NEXT MAJOR TASKS <<<
-- [core] **Source real regional TPM survey data** for `markov_chain` —
-  currently the transition matrix is synthesized at runtime from this
-  repo's own hourly probability arrays (persistence-blended binomial pmf,
-  see `core/occupancy_engine.py` docstring), not calibrated against a real
-  survey. Only `working_couple` uses it today; other archetypes still use
-  `binomial_independent`. Do not copy TPM data from pyCREST/richardsonpy/
-  tsorb (GPLv3). Note the two official CREST Excel tools obtained directly
-  (`data/inputs/CREST_Domestic_electricity_demand_model_1.0e.xlsm`,
-  `Domestic_Lighting_Model_1.0e.xlsm` — gitignored, not committed) contain
-  `tpm1-5_wd`/`tpm1-5_we` sheets with the real TPM data; these carry no
-  embedded license statement (checked docProps + `main` sheet, none
-  found), unlike the separate EEDAL 2009 conference paper PDF which *is*
-  explicitly CC BY-NC-ND (noncommercial, no derivatives) for the writeup
-  itself — don't conflate the two. If real TPM calibration happens, use
-  these files as the source and document the resulting data's provenance
-  the same way `equipment.json` does now (see `resolved.md`).
 - [households] **More archetypes / real calibration** — the 5 current
   archetypes (`generic`, `working_couple`, `family_with_children`,
   `retired_single`, `student_shared`) have illustrative, hand-authored

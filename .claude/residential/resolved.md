@@ -46,6 +46,42 @@ Do not re-raise. "BY-DESIGN" are deliberate choices.
   Deep import paths removed as a breaking change (package is Alpha);
   `CHANGELOG.md` documents old→new paths.
 
+## CREST TPM calibration round (2026-08-14) — fixed/settled
+- **Real CREST transition-probability-matrix (TPM) data now backs a new
+  `markov_chain_crest` generator** (`core/occupancy_engine.py`), resolving
+  the former `open.md` "Source real regional TPM survey data" NEXT MAJOR
+  TASK. Extracted (one-time, reproducible, `scripts/extract_crest_tpm.py`)
+  from the official CREST Domestic Electricity Demand Model 1.0e workbook
+  (`data/inputs/CREST_Domestic_electricity_demand_model_1.0e.xlsm`,
+  gitignored, obtained directly by the user, CC BY-NC-ND — no
+  redistribution of the raw workbook, only the derived numbers, same
+  handling as `equipment.json`'s CREST-sourced fields). The workbook's 10
+  sheets `tpm{1..5}_{wd,we}` are indexed by **household size** (1-5
+  residents — confirmed directly against the workbook, not by the informal
+  `tpm1-5` shorthand this doc previously used), each a 144-period
+  (10-minute resolution) x 7x7 (active-occupant states 0-6) transition
+  matrix; extraction trims to the reachable `(m+1, m+1)` submatrix per
+  size `m` and composes the six 10-minute matrices covering each clock
+  hour into one hourly matrix (`households/crest_tpm.py::
+  compose_hourly_transition_matrix`, exact via the Chapman-Kolmogorov
+  equation given CREST's own 10-minute-Markov assumption) — the committed
+  artifact is `households/data/tpm_crest.json`, sizes 1-5 only.
+- **Scope**: only the active-occupant-*count transition* dynamics are real
+  CREST data. Presence-vs-active split and `n_asleep` still come from this
+  repo's own (illustrative, non-CREST) `home_probabilities`/
+  `active_probabilities`/`asleep_probabilities` arrays, exactly as the
+  synthesized `markov_chain` generator already did — `markov_chain_crest`
+  does not claim full-model CREST calibration, only this one dynamic.
+- **`working_couple` migrated in place** from `markov_chain` to
+  `markov_chain_crest` — a same-seed reproducibility break, deliberately
+  accepted (package is Alpha; real CREST data is strictly better than the
+  synthesized persistence-blend formula it replaces). Households above
+  `households/crest_tpm.py::MAX_CALIBRATED_SIZE` (5 residents — CREST's own
+  modeled range) fall back to the original synthesized `markov_chain` with
+  a `warnings.warn`, rather than guessing/reusing the 5-resident matrix.
+  `markov_chain` itself is unchanged and still registered, for any other
+  caller/archetype.
+
 ## buem-alignment round (2026-07-28) — fixed/settled
 - **Real "asleep" occupancy state added** — `occ_sleeping` for buem
   (`core/buem_adapter.py`) used to be a fixed 23:00-07:00 heuristic since
