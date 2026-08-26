@@ -10,7 +10,7 @@ actually built.
 
 ## What was built
 
-`occupancy.generate_dhw_draws(profile, *, num_persons, cooking_active=None, tapping_categories=None, seed=None)`
+`occupancy.generate_dhw_draws(profile, *, num_persons, cooking_active=None, tapping_categories=None, demand_shape_category=None, demand_shapes=None, seed=None)`
 — a standalone, opt-in function (not wired into `HouseholdProfile.generate()`,
 `ElectricityConsumptionProfile.generate()`, or `to_buem_profiles()`; the
 user's own directive: *"DHW was never supposed to be integrated into the
@@ -248,21 +248,75 @@ rather than editing this one in place — `generate_dhw_draws()`'s
 `tapping_categories=` parameter already accepts any validated table, so
 wiring in a region-specific variant needs no code change either.
 
+## A real, measured alternative timing shape: EN 12831-3 Annex Table B.2
+
+**Added 2026-08-18, surfaced by buem, not occupancy's own research.**
+While working the parallel buem-side DHW/cooking energy-conversion ask
+(`D:\test\buem\.claude\dhw_cooking_heat_handoff.md`), buem obtained two
+free EPB Center demonstration spreadsheets
+(`Demo_EN_12831-3_DHW_needs_2021-09-02.xlsx`,
+`Demo_EN_16798-1_Use_Profile_Generator_2021-09-01.xlsm`) and, inspecting
+them directly, found real hourly DHW-demand-shape tables it didn't need
+for its own energy-conversion work but flagged as exactly what the open
+item below (#2) was still missing — a genuine measured curve, not a
+proxy. Per this repo's ownership boundary (`CLAUDE.md`), buem left the
+extraction and wiring to occupancy rather than building it itself.
+
+`households/data/dhw_demand_shape_categories.csv` (extracted via
+`scripts/extract_dhw_demand_shape_categories.py`, mirroring
+`extract_dhw_tapping_categories.py`'s pattern) bundles EN 12831-3:2017
+Annex Table B.2 — real hourly relative-DHW-demand percentages by building
+category, cross-checked (2026-08-18) against a second, independently-
+obtained workbook and found byte-identical:
+
+| hour | single-family | apartment | elderly home | student residence | hospital |
+|---|---:|---:|---:|---:|---:|
+| 0–1 | 1.8% | 1% | 0.3% | 1.4% | 0.4% |
+| 7–8 | 4.7% | 6% | 15.7% | 5.8% | 10.5% |
+| 12–13 | 6.3% | 6% | 7.1% | 4.2% | 7.5% |
+| 20–21 | 6.6% | 7% | 1.4% | 5.7% | 2% |
+
+(full 24-hour table in the CSV itself). `generate_dhw_draws()`'s new
+`demand_shape_category=` parameter uses one of these five real curves for
+every owned fixture's draw timing instead of the `activity_link`
+envelopes, when a caller opts in — see that function's own docstring for
+the full mechanics and, importantly, why this is **not** simply
+substituted in as the new `washing_and_dressing` envelope: Table B.2 is a
+*whole-household/building aggregate* across every hot-water end use
+combined (kitchen-sink draws included), not decomposed by fixture the way
+`activity_link` is. Using it only for `washing_and_dressing` while
+`cooking` kept its own separate real `cooking_active` timing would
+double-count the kitchen-sink share Table B.2 already bakes into its
+aggregate curve. So this ships as an explicit, opt-in, whole-household
+alternative mode — real measured shape, not decomposed by fixture — not a
+drop-in upgrade to one specific envelope. Default behavior
+(`activity_link`-based envelopes) is completely unchanged unless a caller
+passes `demand_shape_category=` explicitly.
+
 ## Open items — needs a decision or a document before further refinement
 
 1. **`events_per_day_reference` is a hybrid apportionment** (CREST total
    × DHWcalc shares), not a pure single-source read — see above. The
    highest-value fix is a direct per-fixture daily-volume breakdown, if
    one exists outside the source workbook's VBA macros.
-2. **basin/shower/bath timing** uses the transition-weighted `n_active`
-   proxy (above), not a real washing-and-dressing activity curve. A
-   genuine `Act_WashDress`-equivalent extraction (if a source ever
-   becomes available) would improve this the same way `Act_Cooking`
-   already improves kitchen-sink timing.
-3. **Not wired to service buildings.** Both source datasets and this
-   fixture set are household-specific; a service-building DHW model
-   (commercial kitchens, staff washrooms, ...) needs its own literature
-   base, not a naive reuse of this table.
+2. **basin/shower/bath timing (`activity_link`-based mode)** still uses
+   the transition-weighted `n_active` proxy (above), not a real
+   washing-and-dressing activity curve — **partially addressed** by the
+   new `demand_shape_category=` alternative above, which is a real
+   measured curve but a whole-household aggregate, not a per-fixture
+   `Act_WashDress`-equivalent. A genuine per-fixture extraction (if a
+   source ever becomes available) would still improve the default
+   `activity_link` mode specifically, the same way `Act_Cooking` already
+   improves kitchen-sink timing there.
+3. **Not wired to service buildings** — `generate_dhw_draws()` remains
+   household-only; both fixture datasets are household-specific, so a
+   service-building DHW model (commercial kitchens, staff washrooms, ...)
+   still needs its own literature base, not a naive reuse of this table.
+   Note, though, that `dhw_demand_shape_categories.csv`'s `elderly_home`,
+   `student_residence`, and `hospital` columns are already
+   building-category (not household-specific) EN 12831-3 data — real
+   groundwork for that future service-building extension, even though
+   nothing consumes them from the service-buildings side yet.
 4. **NTA 8800's Dutch-specific defaults** remain unverified against
    primary text — a lower-priority cross-check per the original ask,
    still open, and deliberately not load-bearing for this table (see
