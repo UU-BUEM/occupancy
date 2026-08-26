@@ -18,6 +18,15 @@
   DOE's Hospital prototype is a separate, always-occupied reference
   building), gym/fitness, cinema/theatre, data center, light-industrial/
   factory (distinct from `warehouse`'s bulk-storage-only profile).
+- [services_buildings] **No real validation data sourced yet** — CBS
+  StatLine table 81528NED, suggested as a validation reference, turned
+  out to be **residential dwelling-type** electricity/gas consumption
+  (apartment/detached/... by region), not a business/sector-type
+  breakdown — see `residential/open.md` for the real (household-side) use
+  of it. A CBS (or other NL-specific) dataset breaking down electricity
+  consumption by *commercial building type* (office/retail/hospital/...)
+  to validate `services_buildings` output against would still need to be
+  found — not done this round.
 - [services_buildings] **Pull DOE prototype-building `.idf` files directly
   for real hour-by-hour schedules** — `hotel`/`bakery`/`warehouse`/
   `clinic`'s `occupancy_fraction`/`peak_occupancy_fraction` curves are

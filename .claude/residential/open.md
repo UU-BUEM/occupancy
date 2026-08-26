@@ -39,3 +39,20 @@
   values are illustrative** (ISO 7730 / ASHRAE Fundamentals Ch. 18-informed
   ballparks, not survey-calibrated) — see `resolved.md` and
   `services/open.md`'s matching note for building types.
+- [households] **Real validation target identified, not yet used**: CBS
+  StatLine table **81528NED** ("Energieverbruik particuliere woningen;
+  woningtype, wijken en buurten",
+  <https://opendata.cbs.nl/#/CBS/nl/dataset/81528NED/table>) gives real
+  Dutch average annual electricity (kWh) and gas (m³) consumption per
+  connection, broken down by **housing type** (apartment, corner/semi-
+  detached/detached house, ...) and by **region** (national/provincial/
+  municipal/neighborhood), 2020-2024 (2022-2023 revised with smart-meter
+  data, 2024 provisional) — a plausible real-world check for this
+  package's per-archetype `ElectricityConsumptionProfile` totals, if
+  housing types can be reasonably mapped onto our composition-based
+  archetypes (`generic`, `working_couple`, ...; the mapping isn't 1:1,
+  since CBS bins by dwelling type, not household composition). Note this
+  is **residential dwelling** data, not a business/sector-type breakdown
+  — it does not cover `services_buildings`; see `services/open.md` for
+  that (still unsourced) equivalent. Not yet pulled or compared against
+  this repo's output — flagged here as a concrete next step, not done.
