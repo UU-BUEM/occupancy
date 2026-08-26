@@ -57,6 +57,20 @@ introducing a new ``activity_link`` value that has no registered
 envelope still works: it falls back to plain ``n_active``, a documented,
 honest default rather than a silent misrouting.
 
+**A real, measured alternative to the transition-weighted proxy.**
+``dhw_demand_shape_categories.csv`` bundles EN 12831-3:2017 Annex Table
+B.2 -- real, standards-sourced hourly DHW-demand shares by building
+category (single-family dwelling, apartment dwelling, residential home
+for the elderly, student residence, hospital), not derived from anything
+this repo already generates. Passing ``demand_shape_category=`` to
+:func:`generate_dhw_draws` uses that category's real curve for every
+owned fixture's timing instead of the ``activity_link`` envelopes above
+-- see that function's own docstring for exactly what this trades off
+(a real measured whole-household/building shape, not decomposed by
+fixture, vs. per-fixture envelopes that are decomposed but include one
+proxy). Opt-in, not the default: the ``activity_link`` envelopes above
+remain unchanged unless a caller asks for this explicitly.
+
 **Status: first-pass, illustrative** -- same disclosure standard as this
 repo's other early-stage additions (``core/disaggregation.py``,
 ``equipment.json``'s hourly weight shapes). Real, sourced numbers
@@ -87,6 +101,10 @@ _REQUIRED_COLUMNS = {
     "events_per_day_reference",
     "reference_num_persons",
 }
+
+_DEMAND_SHAPE_PACKAGE = "occupancy.households"
+_DEMAND_SHAPE_RESOURCE = "data/dhw_demand_shape_categories.csv"
+_DEMAND_SHAPE_HOURS = tuple(range(24))
 
 #: A timing-envelope function maps (n_active, cooking_signal) -> an
 #: hourly array of non-negative weights used to place draw events. Both
@@ -205,6 +223,66 @@ def load_tapping_categories() -> pd.DataFrame:
     return _prepare_tapping_categories(table)
 
 
+def _prepare_demand_shapes(table: pd.DataFrame) -> pd.DataFrame:
+    """Validate a demand-shape table (an ``hour`` column plus one or more
+    building-category columns) and return it sorted by hour. Shared by
+    :func:`load_demand_shape_categories` and by :func:`generate_dhw_draws`
+    when a caller supplies a custom table directly via ``demand_shapes=``,
+    so both paths get the same checks."""
+    if "hour" not in table.columns:
+        raise ValueError(
+            "dhw_demand_shape_categories table is missing required "
+            "column 'hour'"
+        )
+    category_columns = [c for c in table.columns if c != "hour"]
+    if not category_columns:
+        raise ValueError(
+            "dhw_demand_shape_categories table has no building-category "
+            "columns (only 'hour')"
+        )
+
+    table = table.sort_values("hour").reset_index(drop=True)
+    if list(table["hour"]) != list(_DEMAND_SHAPE_HOURS):
+        raise ValueError(
+            "dhw_demand_shape_categories table: 'hour' column must "
+            "contain exactly one row per hour 0-23, found "
+            f"{sorted(table['hour'].tolist())}"
+        )
+
+    for column in category_columns:
+        values = table[column]
+        if (values < 0).any():
+            raise ValueError(
+                f"dhw_demand_shape_categories table: column {column!r} "
+                "has negative value(s) -- every hour's share must be "
+                "non-negative"
+            )
+        total = float(values.sum())
+        if abs(total - 1.0) > 0.01:
+            raise ValueError(
+                f"dhw_demand_shape_categories table: column {column!r} "
+                f"sums to {total!r} across its 24 hours, expected ~1.0 "
+                "(a fraction of the category's own daily total)"
+            )
+    return table
+
+
+def load_demand_shape_categories() -> pd.DataFrame:
+    """Load and validate the bundled, editable EN 12831-3 Annex Table B.2
+    hourly DHW-demand-shape reference table (see the CSV's own header for
+    full provenance) -- real, standards-sourced hourly shares of each
+    building category's own daily DHW-volume total, by hour. Returns a
+    fresh, validated copy each call, so a caller may freely mutate the
+    result (e.g. to hand a variant to :func:`generate_dhw_draws` via
+    ``demand_shapes=``) without affecting other callers. Raises
+    ``ValueError`` with a specific, actionable message if the table has
+    been hand-edited into an inconsistent state (missing ``hour`` column,
+    a gap/duplicate in hours 0-23, a negative share, or a column that
+    doesn't sum close to 1.0)."""
+    table = load_csv_resource(_DEMAND_SHAPE_PACKAGE, _DEMAND_SHAPE_RESOURCE)
+    return _prepare_demand_shapes(table)
+
+
 def _profile_year(profile: pd.DataFrame) -> int:
     """Best-effort extraction of a representative year from ``profile``'s
     index, for default-seed derivation only. Falls back to ``0`` (not an
@@ -224,6 +302,8 @@ def generate_dhw_draws(
     num_persons: int,
     cooking_active: pd.Series | None = None,
     tapping_categories: pd.DataFrame | None = None,
+    demand_shape_category: str | None = None,
+    demand_shapes: pd.DataFrame | None = None,
     seed: int | np.random.Generator | None = None,
 ) -> pd.DataFrame:
     """Generate stochastic hourly DHW draw volumes in liters.
@@ -263,6 +343,40 @@ def generate_dhw_draws(
         edited row, or an entirely different reference dataset. Validated
         the same way as the bundled table. Defaults to loading the
         bundled CSV.
+    demand_shape_category:
+        Optional real, standards-sourced alternative to the per-fixture
+        ``activity_link`` envelopes above (:data:`_TIMING_ENVELOPES`).
+        When given -- one of the bundled
+        ``dhw_demand_shape_categories.csv``'s column names (e.g.
+        ``"single_family_dwelling"``, ``"apartment_dwelling"``,
+        ``"elderly_home"``, ``"student_residence"``, ``"hospital"``) --
+        every *owned* fixture's draw timing for this call follows that
+        category's real EN 12831-3 Annex Table B.2 hourly shape instead
+        of its own ``activity_link`` envelope; ``cooking_active`` and the
+        ``n_active``-derived envelopes are not consulted at all in this
+        mode. This is a deliberate, documented trade-off, not a strict
+        upgrade: Table B.2's shape is a *whole-household/building
+        aggregate* across every hot-water end use combined (kitchen-sink
+        draws included), not decomposed by fixture the way
+        ``activity_link`` is -- so opting in trades per-fixture timing
+        nuance (real cooking timing vs. a washing-and-dressing proxy) for
+        a single real *measured* curve, rather than combining both. Per-
+        fixture ownership, event-count, and volume mechanics are
+        unaffected either way -- only which weights choose each event's
+        hour changes. Raises ``ValueError`` if ``demand_shape_category``
+        doesn't name a column in the resolved demand-shape table. See
+        ``docs/dhw/design.md`` for why this exists (open item #2: a real
+        replacement for the transition-weighted proxy) and why it isn't
+        simply substituted in as the new ``washing_and_dressing``
+        envelope.
+    demand_shapes:
+        Optional override of the bundled EN 12831-3 Annex Table B.2
+        reference table (same shape as
+        :func:`load_demand_shape_categories`'s return value: an ``hour``
+        column plus one column per building category) -- e.g. a variant
+        with an added region-specific column. Validated the same way as
+        the bundled table. Defaults to loading the bundled CSV. Ignored
+        unless ``demand_shape_category`` is also given.
     seed:
         Owns this function's randomization the same way ``seed=`` already
         works on ``HouseholdProfile``/``ServiceBuildingProfile`` -- a
@@ -326,6 +440,34 @@ def generate_dhw_draws(
         else None
     )
 
+    # A real, standards-sourced shape overrides every owned fixture's
+    # per-activity_link envelope uniformly -- see generate_dhw_draws()'s
+    # own docstring for why this is a whole-household/building aggregate
+    # alternative, not a per-fixture substitution.
+    demand_shape_weights: np.ndarray | None = None
+    if demand_shape_category is not None:
+        if demand_shapes is None:
+            demand_shapes = load_demand_shape_categories()
+        else:
+            demand_shapes = _prepare_demand_shapes(demand_shapes)
+        if demand_shape_category not in demand_shapes.columns:
+            available = [c for c in demand_shapes.columns if c != "hour"]
+            raise ValueError(
+                f"demand_shape_category={demand_shape_category!r} is not "
+                f"a column in the demand-shape table; available: "
+                f"{available}"
+            )
+        try:
+            hour_of_day = profile.index.hour.to_numpy()
+        except AttributeError as exc:
+            raise ValueError(
+                "demand_shape_category requires profile.index to be "
+                "datetime-like (needs an .hour accessor to map each row "
+                "to an hour of day)"
+            ) from exc
+        shape_24 = demand_shapes[demand_shape_category].to_numpy(dtype=float)
+        demand_shape_weights = shape_24[hour_of_day]
+
     result = pd.DataFrame(index=profile.index)
     total = np.zeros(num_hours)
 
@@ -339,10 +481,13 @@ def generate_dhw_draws(
             n_events = int(rng.poisson(expected_events))
 
             if n_events > 0:
-                envelope_fn = _TIMING_ENVELOPES.get(
-                    row.activity_link, _default_envelope
-                )
-                weights = envelope_fn(n_active, cooking_signal)
+                if demand_shape_weights is not None:
+                    weights = demand_shape_weights
+                else:
+                    envelope_fn = _TIMING_ENVELOPES.get(
+                        row.activity_link, _default_envelope
+                    )
+                    weights = envelope_fn(n_active, cooking_signal)
                 weight_sum = weights.sum()
                 if weight_sum <= 0:
                     # No timing signal at all (e.g. zero active occupancy

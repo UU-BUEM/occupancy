@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `generate_dhw_draws()`'s new `demand_shape_category=`/`demand_shapes=`
+  parameters — a real, standards-sourced alternative to the
+  transition-weighted `washing_and_dressing` timing proxy: EN 12831-3:2017
+  Annex Table B.2's hourly DHW-demand shares by building category
+  (`single_family_dwelling`, `apartment_dwelling`, `elderly_home`,
+  `student_residence`, `hospital`), bundled as
+  `households/data/dhw_demand_shape_categories.csv` and loadable via the
+  new `occupancy.households.dhw.load_demand_shape_categories()`. Opt-in —
+  default `activity_link`-based timing is unchanged unless a caller passes
+  `demand_shape_category=` explicitly; see `docs/dhw/design.md` for why
+  this is a whole-household aggregate alternative, not a drop-in
+  replacement for one specific fixture's envelope. Surfaced by buem's own
+  parallel DHW/cooking work, extracted here per this repo's
+  occupancy-owns-occupant-behavior boundary (`CLAUDE.md`).
+- `scripts/extract_dhw_demand_shape_categories.py` — reproducible
+  extraction of the above CSV from
+  `data/inputs/Demo_EN_12831-3_DHW_needs_2021-09-02.xlsx` (EPB Center's
+  free EN 12831-3:2017 demonstration spreadsheet), mirroring
+  `extract_dhw_tapping_categories.py`'s established pattern.
+
 ## [5.0.0] - 2026-08-18
 
 ### Changed

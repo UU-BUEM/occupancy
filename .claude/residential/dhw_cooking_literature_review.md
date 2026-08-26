@@ -31,6 +31,8 @@ ask, across three research passes (2026-08-17 to 2026-08-18), with
 | 5 | McKenna, E., Thomson, M. (2016). "High-resolution stochastic integrated thermal–electrical domestic demand model." *Applied Energy* 165, 445–461. `doi:10.1016/j.apenergy.2015.12.089` | Read in full | Section 3.4 describes the real hot-water module (stochastic fixture assignment, activity-linked timing, calibrated stochastic volume-per-event); Section 3.5.2 gives a constant 10 °C cold-mains assumption and cylinder sizing; Section 5.2 gives a real UK validation anchor (122.4 L/day/dwelling, EST measured data, vs. the model's own 117.5 L/day/dwelling output); Section 5.4 gives a DHW simultaneity factor of 0.13 at 30 dwellings, cross-checked against Baetens & Saelens' StROBe model (also 0.13). The exact per-fixture flow-rate/duration/volume numeric tables are not published in the paper's main text — see the workbook entry below, which supplied them instead. |
 | 6 | Jordan, U., Vajen, K. (2005). "DHWcalc: Program to Generate Domestic Hot Water Profiles with Statistical Means for User Defined Conditions." *Proc. ISES Solar World Congress*, Orlando. | Read in full (free, direct PDF from University of Kassel's own repository) | The real numeric tapping-category table (small/medium/shower/bath: flow rate, duration, volume/event, events/day, portion of daily total) for a 200 L/day single-family-house IEA SHC Task 26 reference case. Superseded as the primary source for `dhw_tapping_categories.csv`'s absolute numbers once the CREST v2.3.3 workbook (below) was located — its relative category *shares* (14/36/40/10%) are still used, to apportion the workbook's real total across fixtures (see `docs/dhw/design.md`). |
 | 7 | Home Energy Model (HEM), UK government's SAP successor. Technical guide: `home-energy-model.co.uk/technical/hot-water/` | Read in full (free, current) | Independent (non-CREST, non-DHWcalc) UK cross-check figures: legacy SAP flat bath volume = 73 L; generic tap draw-off default 12 L/min. Not wired into the implementation — kept as a validation reference only. |
+| 8 | EN 12831-3:2017, "Energy performance of buildings — Method for calculation of the design heat load — Part 3: Domestic hot water systems heat load and characterisation of needs." Accessed via EPB Center's free demonstration spreadsheet, not the base standard text directly (paywalled — see NTA 8800 section below). | Workbook inspected directly (`Demo_EN_12831-3_DHW_needs_2021-09-02.xlsx`, `openpyxl`), not the standard's own prose | Annex Table B.2 (`Annex_B` sheet, "corrected, assembled" rows 68–91): real hourly relative-DHW-demand percentages by building category (single family dwelling, apartment dwelling, residential home for the elderly, student residence, hospital) — extracted into `households/data/dhw_demand_shape_categories.csv` via `scripts/extract_dhw_demand_shape_categories.py`. **Surfaced by buem, not found independently here**: buem's own parallel session (`D:\test\buem\.claude\dhw_cooking_heat_handoff.md`, "Real EN 12831-3 Annex data found") located and inspected this workbook first, for its own ΔT/annual-volume constants (Annex Table B.5, `Method_input` sheet — buem-side only, not used here), and flagged Table B.2 as occupancy's to extract per this repo's ownership boundary. Same physical file buem's `scripts/extract_dhw_reference_values.py` reads from its own gitignored copy — each repo keeps an independent copy, no cross-repo file sharing. |
+| 9 | EN 16798-1-adjacent "Use Profile Generator" — a second, independently-obtained EPB Center demonstration spreadsheet, not itself EN 12831-3. | Workbook inspected directly (`Demo_EN_16798-1_Use_Profile_Generator_2021-09-01.xlsm`, `DHW_Tap_profiles` sheet, `openpyxl`) | Not used as an extraction source (row 8's workbook already supplies the data, and is the one already bundled/cited from buem's parallel work) — read specifically to cross-check row 8's Table B.2 numbers against an independent tool. Confirmed byte-identical percentages for all five building categories, weekday/Saturday/Sunday sections alike. Corroboration only; `scripts/extract_dhw_demand_shape_categories.py` does not read this file. |
 
 ### The CREST v2.3.3 workbook — the key find
 
@@ -136,8 +138,25 @@ average, `generate_dhw_draws()` uses a transition-weighted envelope
 changes) — reusing Richardson et al. (2008)'s own "people becoming
 active/inactive" validation concept (Part 1, source #1) as a timing proxy
 built from data this repo already generates. Still a proxy, not a
-measured curve — the highest-value remaining open item in `docs/dhw/
-design.md`.
+measured curve for this default `activity_link` mode.
+
+**Now also addressed with a real measured curve, at the whole-household
+level (2026-08-18)**: EN 12831-3's Annex Table B.2 (Part 1, source #8)
+is a genuine, standards-sourced, hourly-measured DHW-demand shape — not
+derived from anything this repo already generates, unlike the proxy
+above. `generate_dhw_draws()`'s new `demand_shape_category=` parameter
+uses it as an alternative to the `activity_link` envelopes entirely (see
+`docs/dhw/design.md`). It is not a strict upgrade to the proxy above,
+though, so the proxy remains the default: Table B.2 is a *whole-
+household aggregate* across every hot-water end use (kitchen-sink draws
+included), not decomposed by fixture, so it cannot simply replace the
+`washing_and_dressing`-specific envelope without double-counting the
+share `cooking`'s own real `cooking_active` timing already accounts for
+separately. A genuine *per-fixture* `Act_WashDress`-equivalent curve
+would still improve the default mode specifically — that remains the
+highest-value open item for `activity_link` mode, now downgraded from
+"no real alternative exists" to "a real whole-household alternative
+exists; a real per-fixture one still doesn't."
 
 ### 3. What does "flow rate" mean, and does it drive heat demand?
 

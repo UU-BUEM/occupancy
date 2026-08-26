@@ -47,6 +47,23 @@ items: `services/open.md`.
     without surfacing the actual numbers — the base standard remains a
     paid NEN publication with no free full-text mirror found across two
     sessions.
+  - **New, buem-surfaced item (2026-08-18): EN 12831-3 Annex Table B.2
+    real hourly demand-shape data — implemented.** While working its own
+    energy-conversion half of this ask, buem obtained and inspected
+    `Demo_EN_12831-3_DHW_needs_2021-09-02.xlsx`/`Demo_EN_16798-1_Use_
+    Profile_Generator_2021-09-01.xlsm` (EPB Center free demo
+    spreadsheets), used the former's ΔT/annual-volume constants for its
+    own `dhw_cooking.py`, and flagged Annex Table B.2 (real hourly
+    DHW-demand shares by building category) as occupancy's to extract —
+    exactly `docs/dhw/design.md`'s then-open item #2 ("no real
+    washing-and-dressing timing curve, uses a transition-weighted
+    proxy"). Extracted via new `scripts/extract_dhw_demand_shape_
+    categories.py` into `households/data/dhw_demand_shape_categories.csv`
+    and wired in as `generate_dhw_draws()`'s new `demand_shape_category=`
+    parameter — a real, opt-in, whole-household alternative to the
+    `activity_link` envelopes (not a strict replacement of the proxy,
+    since Table B.2 isn't decomposed by fixture; see `docs/dhw/design.md`
+    for why both modes are kept). Default behavior unchanged.
 - [pylovo/multi-profile] **Idea, not started (2026-07-31)** — two possible
   future directions raised for occupancy's elecLoad output interacting
   with more than one profile at a time, neither finalized/scoped:

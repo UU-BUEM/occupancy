@@ -7,6 +7,7 @@ from occupancy.households.dhw import (
     _cooking_envelope,
     _washing_and_dressing_envelope,
     generate_dhw_draws,
+    load_demand_shape_categories,
     load_tapping_categories,
     register_timing_envelope,
 )
@@ -304,3 +305,174 @@ def test_generate_dhw_draws_works_against_a_real_household_profile() -> None:
     )
     assert len(result) == len(profile)
     assert result["dhw_liters_total"].sum() > 0
+
+
+# -- EN 12831-3 Annex Table B.2 demand-shape categories --------------------
+
+
+def _custom_demand_shapes(**overrides: list) -> pd.DataFrame:
+    """A minimal, otherwise-valid demand-shape table: all of a category's
+    daily share concentrated in a single hour, for isolating
+    generate_dhw_draws()'s demand_shape_category= mechanics from the real
+    bundled numbers."""
+    base = {
+        "hour": list(range(24)),
+        "only_hour_5": [1.0 if h == 5 else 0.0 for h in range(24)],
+    }
+    base.update(overrides)
+    return pd.DataFrame(base)
+
+
+def test_load_demand_shape_categories_has_the_expected_columns_and_sums() -> (
+    None
+):
+    table = load_demand_shape_categories()
+    assert list(table["hour"]) == list(range(24))
+    category_columns = [c for c in table.columns if c != "hour"]
+    assert set(category_columns) == {
+        "single_family_dwelling",
+        "apartment_dwelling",
+        "elderly_home",
+        "student_residence",
+        "hospital",
+    }
+    for column in category_columns:
+        assert table[column].sum() == pytest.approx(1.0, abs=0.01)
+        assert (table[column] >= 0).all()
+
+
+def test_load_demand_shape_categories_returns_a_fresh_copy() -> None:
+    first = load_demand_shape_categories()
+    first.loc[0, "single_family_dwelling"] = -999.0
+    second = load_demand_shape_categories()
+    assert second.loc[0, "single_family_dwelling"] != -999.0
+
+
+def test_generate_dhw_draws_rejects_unknown_demand_shape_category() -> None:
+    profile = _hourly_profile()
+    with pytest.raises(ValueError, match="not a column"):
+        generate_dhw_draws(
+            profile,
+            num_persons=1,
+            seed=1,
+            demand_shape_category="not_a_real_category",
+        )
+
+
+def test_generate_dhw_draws_rejects_demand_shapes_missing_hour_column() -> (
+    None
+):
+    profile = _hourly_profile()
+    with pytest.raises(ValueError, match="'hour'"):
+        generate_dhw_draws(
+            profile,
+            num_persons=1,
+            seed=1,
+            demand_shape_category="x",
+            demand_shapes=pd.DataFrame({"x": [1.0]}),
+        )
+
+
+def test_generate_dhw_draws_rejects_demand_shapes_with_bad_hour_coverage() -> (
+    None
+):
+    profile = _hourly_profile()
+    bad = _custom_demand_shapes().iloc[:23]  # drop hour 23 -> only 23 rows
+    with pytest.raises(ValueError, match="one row per hour"):
+        generate_dhw_draws(
+            profile,
+            num_persons=1,
+            seed=1,
+            demand_shape_category="only_hour_5",
+            demand_shapes=bad,
+        )
+
+
+def test_generate_dhw_draws_rejects_demand_shapes_column_not_summing_to_one() -> (
+    None
+):
+    profile = _hourly_profile()
+    bad = _custom_demand_shapes(
+        only_hour_5=[0.5 if h == 5 else 0.0 for h in range(24)]
+    )
+    with pytest.raises(ValueError, match="sums to"):
+        generate_dhw_draws(
+            profile,
+            num_persons=1,
+            seed=1,
+            demand_shape_category="only_hour_5",
+            demand_shapes=bad,
+        )
+
+
+def test_demand_shape_category_places_every_draw_at_that_hour() -> None:
+    """A demand-shape table with 100% of a category's share on one hour
+    must place every event from every owned fixture at that hour -- and
+    override the tapping table's own activity_link envelope entirely
+    (the cooking-linked fixture here would otherwise follow n_active)."""
+    profile = _hourly_profile(hours=24 * 14, n_active=1.0)
+    table = _custom_table(events_per_day_reference=[5.0])
+    shapes = _custom_demand_shapes()
+
+    result = generate_dhw_draws(
+        profile,
+        num_persons=1,
+        seed=2,
+        tapping_categories=table,
+        demand_shape_category="only_hour_5",
+        demand_shapes=shapes,
+    )
+
+    draws = result["dhw_liters_widget"]
+    assert draws.sum() > 0  # some draws actually happened
+    off_hour = draws.index.hour != 5
+    assert (draws[off_hour] == 0).all()
+
+
+def test_demand_shape_category_ignores_cooking_active_and_n_active() -> None:
+    """With demand_shape_category set, cooking_active must not influence
+    timing at all -- even a cooking_active signal pointing at a different
+    hour than the demand shape must be overridden."""
+    profile = _hourly_profile(hours=24 * 7, n_active=1.0)
+    cooking_active = pd.Series(False, index=profile.index)
+    cooking_active.iloc[10] = True  # hour 10 on day 1 -- not hour 5
+
+    table = _custom_table(events_per_day_reference=[5.0])
+    shapes = _custom_demand_shapes()
+
+    result = generate_dhw_draws(
+        profile,
+        num_persons=1,
+        cooking_active=cooking_active,
+        seed=2,
+        tapping_categories=table,
+        demand_shape_category="only_hour_5",
+        demand_shapes=shapes,
+    )
+
+    draws = result["dhw_liters_widget"]
+    assert draws.sum() > 0
+    assert (draws[draws.index.hour != 5] == 0).all()
+
+
+def test_generate_dhw_draws_demand_shape_requires_datetime_index() -> None:
+    profile = pd.DataFrame({"n_active": np.ones(24 * 3)}, index=range(24 * 3))
+    with pytest.raises(ValueError, match="datetime-like"):
+        generate_dhw_draws(
+            profile,
+            num_persons=1,
+            seed=1,
+            demand_shape_category="single_family_dwelling",
+        )
+
+
+def test_generate_dhw_draws_default_behavior_unaffected_by_new_parameters() -> (
+    None
+):
+    """Not passing demand_shape_category= must reproduce exactly the same
+    output as before this feature existed -- a purely additive, opt-in
+    change."""
+    profile = _hourly_profile()
+    a = generate_dhw_draws(profile, num_persons=3, seed=42)
+    b = generate_dhw_draws(profile, num_persons=3, seed=42, demand_shapes=None)
+    pd.testing.assert_frame_equal(a, b)
