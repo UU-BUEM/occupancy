@@ -15,10 +15,16 @@ _ALL_BUILDING_TYPES = [
     "bakery",
     "warehouse",
     "clinic",
+    "hospital",
+    "university",
+    "glasshouse",
 ]
 # These never set asleep_probabilities, so n_asleep stays 0 -- unlike
-# hotel, which genuinely has overnight sleeping guests.
-_NEVER_SLEEPS = [bt for bt in _ALL_BUILDING_TYPES if bt != "hotel"]
+# hotel/hospital, which genuinely have overnight sleeping guests/patients.
+_SLEEPS_OVERNIGHT = ("hotel", "hospital")
+_NEVER_SLEEPS = [
+    bt for bt in _ALL_BUILDING_TYPES if bt not in _SLEEPS_OVERNIGHT
+]
 
 
 def test_all_expected_building_types_registered() -> None:
@@ -70,6 +76,104 @@ def test_hotel_uses_hourly_occupancy_curve_generator() -> None:
     assert (
         SERVICE_BUILDING_TYPES["hotel"].generator == "hourly_occupancy_curve"
     )
+
+
+def test_hospital_has_genuine_sleeping_occupants_overnight() -> None:
+    """Same contract as hotel -- a hospital's inpatients genuinely sleep,
+    unlike the outpatient `clinic` type."""
+    profile = ServiceBuildingProfile(
+        building_type="hospital", year=2025, seed=1
+    ).get_profile()
+    assert (profile["n_asleep"] > 0).any()
+    assert (
+        profile["n_asleep"] <= profile["n_present"] - profile["n_active"]
+    ).all()
+
+
+def test_hospital_never_fully_empties() -> None:
+    """Unlike the outpatient `clinic` type (closes overnight/most of the
+    weekend), a 24/7 inpatient hospital's occupancy_fraction curve never
+    touches 0 -- see data/hospital/schedule.json's _comment."""
+    profile = ServiceBuildingProfile(
+        building_type="hospital", year=2025, seed=1
+    ).get_profile()
+    assert (profile["n_present"] > 0).all()
+
+
+def test_hospital_uses_hourly_occupancy_curve_generator() -> None:
+    assert (
+        SERVICE_BUILDING_TYPES["hospital"].generator
+        == "hourly_occupancy_curve"
+    )
+
+
+def test_university_closed_on_weekends() -> None:
+    """Unlike hotel/hospital (also `hourly_occupancy_curve`), a university
+    academic building has no weekend occupancy at all -- expressed via an
+    all-zero weekend column in occupancy_fraction (see
+    core/occupancy_engine.py's guarantee that a curve cell of exactly 0.0
+    stays 0.0 despite noise)."""
+    profile = ServiceBuildingProfile(
+        building_type="university", year=2025, seed=1
+    ).get_profile()
+    is_weekend = profile.index.weekday >= 5
+    assert (profile.loc[is_weekend, "n_present"] == 0).all()
+
+
+def test_university_closed_in_summer_holiday_months() -> None:
+    profile = ServiceBuildingProfile(
+        building_type="university", year=2025, seed=1
+    ).get_profile()
+    summer = profile.index.month.isin([7, 8])
+    assert (profile.loc[summer, "n_present"] == 0).all()
+
+
+def test_university_has_evening_occupancy_unlike_school() -> None:
+    """The defining difference from `school`: rolling class-registration
+    schedules mean university teaching spaces stay in use into the
+    evening (Bae et al.'s classroom curve rises again 6-7 p.m.), while
+    `school` closes at 16:00 (data/school/schedule.json)."""
+    profile = ServiceBuildingProfile(
+        building_type="university", year=2025, seed=1
+    ).get_profile()
+    non_summer_weekday = (~profile.index.month.isin([7, 8])) & (
+        profile.index.weekday < 5
+    )
+    evening = non_summer_weekday & (profile.index.hour == 19)
+    assert (profile.loc[evening, "n_present"] > 0).any()
+
+
+def test_university_peak_occupancy_stays_well_under_half_capacity() -> None:
+    """Bae et al.: 'fewer than 50% of the classrooms in the college
+    building are occupied at the same time' -- unlike `school`, whose
+    single whole-building timetable lets it approach its
+    peak_occupancy_fraction (0.85)."""
+    capacity = SERVICE_BUILDING_TYPES["university"].capacity_default
+    profile = ServiceBuildingProfile(
+        building_type="university", year=2025, seed=1
+    ).get_profile()
+    assert profile["n_present"].max() < 0.6 * capacity
+
+
+def test_glasshouse_open_every_day_unlike_warehouse() -> None:
+    """Unlike `warehouse` (hard closed_weekends), a glasshouse needs daily
+    plant care -- open every day with a shorter weekend window rather
+    than fully closed (data/glasshouse/schedule.json)."""
+    profile = ServiceBuildingProfile(
+        building_type="glasshouse", year=2025, seed=1
+    ).get_profile()
+    is_weekend = profile.index.weekday >= 5
+    assert (profile.loc[is_weekend, "n_present"] > 0).any()
+
+
+def test_glasshouse_has_no_area_normalized_gain() -> None:
+    """Deliberate: no cited lighting-power-density source exists for this
+    type (see the schedule.json _comment) -- gain_w_per_m2 is left None
+    rather than guessed, unlike every other registered type."""
+    assert SERVICE_BUILDING_TYPES["glasshouse"].gain_w_per_m2 is None
+    for building_type, spec in SERVICE_BUILDING_TYPES.items():
+        if building_type != "glasshouse":
+            assert spec.gain_w_per_m2 is not None
 
 
 def test_warehouse_is_closed_on_weekends() -> None:
@@ -249,5 +353,28 @@ def test_cooking_active_present_for_kitchen_equipped_building_types() -> None:
 def test_cooking_active_false_without_kitchen_equipment() -> None:
     profile = ServiceBuildingProfile(
         building_type="warehouse", year=2025, seed=1
+    ).get_profile()
+    assert not profile["cooking_active"].any()
+
+
+@pytest.mark.parametrize("building_type", ["hospital", "university"])
+def test_cooking_active_present_for_hospital_and_university_kitchens(
+    building_type: str,
+) -> None:
+    """hospital carries a real patient/staff-meal kitchen item (Dobosi
+    et al.'s case-study hospital lists one), university a cafeteria item
+    (Bae et al.'s Cafe_OCC_SCH) -- both should show real cooking_active
+    activity, same convention as restaurant's."""
+    profile = ServiceBuildingProfile(
+        building_type=building_type, year=2025, seed=1
+    ).get_profile()
+    assert profile["cooking_active"].any()
+
+
+def test_cooking_active_false_for_glasshouse() -> None:
+    """No kitchen-category equipment in this type -- its schedule-driven
+    climate/lighting/irrigation items are all "process"/"lighting"."""
+    profile = ServiceBuildingProfile(
+        building_type="glasshouse", year=2025, seed=1
     ).get_profile()
     assert not profile["cooking_active"].any()

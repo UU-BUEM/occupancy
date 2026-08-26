@@ -14,8 +14,8 @@ hourly electricity demand from those states, for:
 - **Households** — via composition archetypes (`generic`, `working_couple`,
   `family_with_children`, `retired_single`, `student_shared`, ...).
 - **Service buildings** — `supermarket`, `office`, `restaurant`, `school`,
-  `hotel`, `bakery`, `warehouse`, `clinic`, easily extended with more
-  types.
+  `hotel`, `bakery`, `warehouse`, `clinic`, `hospital`, `university`,
+  `glasshouse`, easily extended with more types.
 
 Core models:
 
@@ -68,6 +68,9 @@ occupancy/
 │       │   ├── bakery.py
 │       │   ├── warehouse.py
 │       │   ├── clinic.py
+│       │   ├── hospital.py
+│       │   ├── university.py
+│       │   ├── glasshouse.py
 │       │   └── data/<type>/{schedule,equipment}.json
 │       └── visualization/
 │           ├── __init__.py

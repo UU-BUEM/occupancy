@@ -8,16 +8,36 @@
   avoid the household-oriented default of 3 silently clobbering e.g. a
   supermarket's `capacity_default: 80`). Needs a dedicated `capacity`
   config field with its own resolution rule.
-- [services_buildings] **More building types** — 8 exist now (supermarket,
-  office, restaurant, school, hotel, bakery, warehouse, clinic — see
-  `resolved.md` for the 2026-07-29 round that added the last four).
-  Adding one is a config addition
+- [services_buildings] **More building types** — 11 exist now (supermarket,
+  office, restaurant, school, hotel, bakery, warehouse, clinic, hospital,
+  university, glasshouse — see `resolved.md` for the 2026-07-29 round that
+  added the first four of those and the 2026-08-20 round that added the
+  last three). Adding one is a config addition
   (`data/<type>/{schedule.json,equipment.json}` + a thin registration
   module) — see `CLAUDE.md` extension points. Candidates not yet covered:
-  24/7 inpatient hospital (distinct from the outpatient `clinic` here —
-  DOE's Hospital prototype is a separate, always-occupied reference
-  building), gym/fitness, cinema/theatre, data center, light-industrial/
-  factory (distinct from `warehouse`'s bulk-storage-only profile).
+  gym/fitness, cinema/theatre, data center, light-industrial/factory
+  (distinct from `warehouse`'s bulk-storage-only profile).
+- [services_buildings] **`glasshouse` has no cited source** — unlike every
+  other type in this package, no standard in this repo's usual reference
+  set (ASHRAE 90.1, ASHRAE 62.1, DOE reference buildings, ISO/SIA/REHVA
+  internal-heat-load comparisons) covers a horticultural glasshouse. Its
+  `schedule.json`/`equipment.json` are general domain-knowledge
+  illustrative defaults, flagged explicitly as such in those files'
+  `_comment` (rather than attaching a citation that isn't really
+  load-bearing). A real fix needs a horticultural-lighting/greenhouse-
+  climate-control reference (e.g. a CIGR/ASABE greenhouse-engineering
+  handbook, or real grower energy-audit data) that wasn't sourced this
+  round.
+- [services_buildings] **`university`'s summer-session activity is
+  approximated as fully closed** — the source paper (Bae et al., see
+  `data/university/schedule.json`'s `_comment`) reports reduced but
+  *nonzero* summer-session occupancy (e.g. classroom ~16% peak), but
+  `hourly_occupancy_curve`'s `closed_months` can only express full
+  closure (hard zero for the whole month), not a dampened-but-open one —
+  same simplification `school` already makes for its own summer closure.
+  A real fix needs a new generator param (e.g. a per-month multiplier
+  instead of a binary closed-months set) — bigger engine change, not done
+  here.
 - [services_buildings] **Pull DOE prototype-building `.idf` files directly
   for real hour-by-hour schedules** — `hotel`/`bakery`/`warehouse`/
   `clinic`'s `occupancy_fraction`/`peak_occupancy_fraction` curves are

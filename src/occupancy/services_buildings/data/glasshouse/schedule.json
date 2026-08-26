@@ -1,0 +1,21 @@
+{
+  "_comment": "No source in this repo's usual reference set covers a horticultural glasshouse/greenhouse -- ASHRAE 90.1 Table 9.5.1 has no such building-area-type category, and none of the papers reviewed for the hospital/university round (see resolved.md) cover one either. Every figure below is a general domain-knowledge illustrative default, not sourced from ASHRAE/DOE/ISO/SIA/REHVA the way every other type's schedule.json in this package is -- flagged explicitly here, unlike the others, rather than attaching a citation that isn't really load-bearing. Modeled as a production/horticultural glasshouse (workers tending crops), not a public botanical-exhibit building. Occupancy is sparse and staff-driven (fixed_schedule, like `warehouse`) -- daily, since crops need attention every day of the week, but a shorter reduced-staffing weekend window (`weekend_open_hour`/`weekend_close_hour`), unlike `warehouse`'s hard `closed_weekends`. The building's actual dominant internal gains are schedule-driven climate-control, supplemental grow-lighting, and irrigation equipment that run on the plants' needs (temperature setpoints, photoperiod, watering cycles) rather than on whether a person is present -- see equipment.json, whose items use `gate: \"none\"`. gain_w_per_m2 is deliberately left `None` (no area-driven component) rather than guessed: a glasshouse's artificial lighting/equipment density is dominated by (a) solar transmission through glazing, which is buem's envelope/solar-gain job, out of this field's scope, and (b) installation-specific supplemental grow-lighting practice (unlit vs. HPS vs. LED, photoperiod strategy, crop type) that varies far too widely to responsibly compress into one figure -- the modeled electrical loads instead live entirely in equipment.json's schedule-driven items, not double-counted through this shortcut.",
+  "id": "glasshouse",
+  "description": "Horticultural glasshouse / greenhouse (production, not public exhibition). Daily plant-care staffing with a shorter weekend window; most internal electrical gain is schedule- (not occupancy-) driven climate-control, grow-lighting, and irrigation equipment -- see equipment.json.",
+  "region": "NL",
+  "capacity_default": 6,
+  "generator": "fixed_schedule",
+  "generator_params": {
+    "open_hour": 7,
+    "close_hour": 16,
+    "weekend_open_hour": 8,
+    "weekend_close_hour": 12,
+    "closed_weekends": false,
+    "peak_occupancy_fraction": 0.7,
+    "active_fraction": 0.9,
+    "noise": 0.1
+  },
+  "heat_gain_present_kw": 0.100,
+  "heat_gain_active_kw": 0.200,
+  "gain_w_per_m2": null
+}

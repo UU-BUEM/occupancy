@@ -59,8 +59,9 @@ occupancy/
 │   ├── services_buildings/     # base __init__.py registers SERVICE_BUILDING_TYPES
 │   │   ├── building_types.py     # ServiceBuildingTypeSpec + registry
 │   │   ├── building_profile.py   # ServiceBuildingProfile
-│   │   ├── {supermarket,office,restaurant,school,hotel,bakery,warehouse,clinic}.py
-│   │   │                        #   one thin file per type (8 today)
+│   │   ├── {supermarket,office,restaurant,school,hotel,bakery,warehouse,
+│   │   │    clinic,hospital,university,glasshouse}.py
+│   │   │                        #   one thin file per type (11 today)
 │   │   └── data/<type>/{schedule.json, equipment.json}
 │   └── visualization/
 ```
@@ -103,10 +104,15 @@ config-driven consumers of one shared engine, not parallel implementations.
   flat peak — most service buildings), `hourly_occupancy_curve` (explicit
   24-hour occupancy-fraction table, weekday/weekend — for building types
   whose day-shape a single rectangle can't represent, e.g. `hotel`'s
-  near-continuous overnight-guest presence with checkout/check-in peaks;
-  mirrors the shape of published DOE/ASHRAE 90.1 prototype-building
-  `Schedule:Compact` fractional schedules more closely than
-  `fixed_schedule`).
+  near-continuous overnight-guest presence with checkout/check-in peaks,
+  `hospital`'s 24/7 inpatient presence, or `university`'s rolling
+  class-registration day-shape with an evening bump `school`'s single
+  timetable doesn't have; mirrors the shape of published DOE/ASHRAE 90.1
+  prototype-building `Schedule:Compact` fractional schedules more closely
+  than `fixed_schedule`. A curve cell of exactly `0.0` (including one
+  zeroed by `closed_months`) is guaranteed to stay exactly `0.0` — no
+  jitter — the same way `fixed_schedule` guarantees its own closed hours;
+  see that function's docstring).
 - **A building type with genuine overnight/sleeping occupants**: set
   `asleep_probabilities` in that type's `schedule.json` (same `(24, 2)`
   shape and semantics as a household archetype's field of the same name —
@@ -114,8 +120,9 @@ config-driven consumers of one shared engine, not parallel implementations.
   Every generator threads it through to a shared `n_asleep` output column,
   which `core.buem_adapter.to_buem_profiles()` consumes directly as
   buem's `occ_sleeping` for *any* building type, not just households —
-  see `hotel`'s `schedule.json` for a working example. Building types that
-  never set it (most service buildings) simply always have `n_asleep == 0`.
+  see `hotel`'s or `hospital`'s `schedule.json` for a working example.
+  Building types that never set it (most service buildings) simply always
+  have `n_asleep == 0`.
 
 ## Conventions
 

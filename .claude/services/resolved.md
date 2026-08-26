@@ -55,3 +55,45 @@ Do not re-raise. "BY-DESIGN" are deliberate choices.
   concrete follow-up if someone can pull the DOE prototype `.idf` files
   directly (e.g. from `NREL/OpenStudio-Prototype-Buildings` on GitHub)
   rather than via web search.
+
+## hospital/university/glasshouse round (2026-08-20) — fixed/settled
+- **Three new building types**: `hospital`, `university`, `glasshouse` —
+  see each `schedule.json`/`equipment.json` `_comment` for full citations.
+  Summary: `hospital` (24/7 inpatient, distinct from the outpatient
+  `clinic` — the exact gap `open.md` flagged since the 2026-07-29 round)
+  sources its `occupancy_fraction`, `heat_gain_present_kw`, and
+  `gain_w_per_m2` from Ahmed, Akhondzada, Kurnitski & Olesen (2017,
+  *Sustainable Cities and Society* 35:134-144) Tables 4-8's "Hospital"
+  columns — REHVA Technology and Research Committee-collected schedule
+  data feeding the prEN16798-1/ISO 17772-1 standards, the first source in
+  this repo's reference set with a genuinely hospital-specific (not
+  generic office/school-derived) schedule; its day-shape independently
+  matches the real hospital's design occupancy schedule in Dobosi, Tanasa,
+  Kaba, Retezan & Mihaila (2019, *E3S Web of Conferences* 111, 06073)
+  Figure 5. `university` sources its occupancy day-shape from an ORNL/DOE
+  college-building occupancy-schedule study (Bae, Yoon, Jung, Malhotra &
+  Im), anchored on that paper's classroom curve (largest single teaching-
+  space type by floor area) rather than a formal area-weighted blend of
+  all its published space types; it is deliberately *not* a copy of
+  `school` — rolling class-registration schedules keep peak occupancy well
+  under 50% of capacity (vs. `school`'s single whole-building timetable
+  reaching 85%) and push occupancy into the evening, which `school`
+  (closes 16:00) never has. `glasshouse` has no cited source at all (see
+  `open.md`) — general domain-knowledge illustrative defaults, the first
+  type in this package to leave `gain_w_per_m2` unset (`None`) and the
+  first to use `strategy_params.gate: "none"` for more than one equipment
+  item (climate control, supplemental grow-lighting, and irrigation all
+  run on their own schedule, not on occupancy).
+- **`hourly_occupancy_curve` bugfix**: a curve cell of exactly `0.0`
+  (e.g. an all-zero weekend column — the only way this generator can
+  express full weekly closure, since unlike `fixed_schedule` it has no
+  `closed_weekends` param of its own) did not stay at `0.0`: Gaussian
+  jitter was added unconditionally, so a positive noise draw could give a
+  supposedly-closed hour a coin-flip's chance of a few phantom occupants.
+  `fixed_schedule` already guarded against the equivalent case (only adds
+  jitter when `is_open`); `hourly_occupancy_curve` now does the same
+  (`core/occupancy_engine.py`). Caught while adding `university`, the
+  first consumer of this generator to rely on an exactly-zero cell for
+  closure — `hotel`'s own curve has no zero cells, so it was never
+  affected and its behavior is unchanged. Regression test:
+  `tests/test_core.py::test_hourly_occupancy_curve_zero_cells_stay_zero_despite_noise`.

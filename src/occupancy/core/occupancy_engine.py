@@ -406,6 +406,20 @@ def hourly_occupancy_curve(ctx: OccupancyGenerationContext) -> pd.DataFrame:
     ``closed_months`` (as in :func:`fixed_schedule`), ``noise`` (stdev of
     additive jitter, default 0.05). ``ctx.asleep_probabilities`` feeds
     ``n_asleep`` exactly as in the other generators.
+
+    An hour whose base fraction is exactly ``0.0`` — either a curve cell
+    itself (e.g. an all-zero weekend column, the only way this generator
+    can express "closed all weekend" since it has no ``closed_weekends``
+    param of its own) or one zeroed out by ``closed_months`` — gets no
+    noise added and stays exactly ``0.0``, mirroring :func:`fixed_schedule`'s
+    ``np.where(is_open, peak_fraction + jitter, 0.0)`` treatment of its own
+    closed hours. Without this, Gaussian jitter centered on a `0.0` base can
+    land positive as often as not, giving a supposedly-closed hour a
+    coin-flip's chance of a few phantom occupants — harmless for
+    :func:`occupancy.services_buildings.hotel`, whose curve has no exactly-
+    zero cells, but would silently break any type relying on a zero cell
+    (or ``closed_months``) for genuine closure (e.g.
+    :func:`occupancy.services_buildings.university`).
     """
     params = ctx.params
     if "occupancy_fraction" not in params:
@@ -429,7 +443,9 @@ def hourly_occupancy_curve(ctx: OccupancyGenerationContext) -> pd.DataFrame:
         base_fraction = np.where(closed, 0.0, base_fraction)
 
     jitter = ctx.rng.normal(loc=0.0, scale=noise, size=len(hours))
-    occupancy_fraction = np.clip(base_fraction + jitter, 0.0, 1.0)
+    occupancy_fraction = np.clip(
+        np.where(base_fraction > 0, base_fraction + jitter, 0.0), 0.0, 1.0
+    )
 
     n_present = ctx.rng.binomial(ctx.size, occupancy_fraction)
     n_active = np.where(
