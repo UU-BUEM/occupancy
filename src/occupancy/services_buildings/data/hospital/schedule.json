@@ -1,0 +1,31 @@
+{
+  "_comment": "24/7 inpatient hospital -- distinct from the outpatient `clinic` type, which closes overnight (see clinic/schedule.json). occupancy_fraction is Ahmed, Akhondzada, Kurnitski & Olesen (2017, Sustainable Cities and Society 35:134-144, Table 6 'Hospital' column) -- REHVA Technology and Research Committee-collected national schedule data feeding the prEN16798-1/ISO 17772-1 standards, the only source in this repo's usual reference set with a Hospital-specific (as opposed to generic office/school) occupancy schedule. Its never-fully-zero day-shape (0.4 overnight baseline, 0.8 daytime peak, weekday > weekend during business hours) independently matches the real hospital's design occupancy schedule in Dobosi, Tanasa, Kaba, Retezan & Mihaila (2019, E3S Web of Conferences 111, 06073) Figure 5 -- two independent sources agreeing on shape. heat_gain_present_kw (0.118 kW) is that same Ahmed et al. Table 4 'Hospital' row's average total (sensible+latent) heat loss per occupant (118.3 W at M=1.2 met, A_DU=1.80 m^2, Du Bois formula) -- a hospital-specific ISO 7730/Fanger-model figure, unlike most other types here which fall back to a generic ~0.100 kW ballpark. gain_w_per_m2 (13 W/m^2) is that Table 5 row's lighting (9.0) + appliances (4.0) unit-load figures (same source, same table family). heat_gain_active_kw, active_fraction, and asleep_probabilities have no equivalent in Ahmed et al. (it models one occupant count only, no active/asleep split) -- illustrative choices of this repo's own, same 'not survey-calibrated' caveat as every other type's non-cited fields. asleep_probabilities gives genuine overnight n_asleep output (inpatients sleep) through the same mechanism as hotel -- see core/occupancy_engine.py module docstring. Uses hourly_occupancy_curve (like hotel), not fixed_schedule, because a hospital has no single open/close window: inpatients are present around the clock.",
+  "id": "hospital",
+  "description": "24/7 inpatient hospital. Continuous occupancy (inpatients, round-the-clock staff) with a daytime peak (rounds, scheduled procedures, admin, visiting hours) over an overnight baseline; unlike the outpatient `clinic` type, never closes.",
+  "region": "NL",
+  "capacity_default": 300,
+  "generator": "hourly_occupancy_curve",
+  "generator_params": {
+    "occupancy_fraction": [
+      [0.4, 0.4], [0.4, 0.4], [0.4, 0.4], [0.4, 0.4],
+      [0.4, 0.4], [0.4, 0.4], [0.4, 0.4], [0.5, 0.5],
+      [0.6, 0.6], [0.8, 0.6], [0.8, 0.6], [0.8, 0.6],
+      [0.8, 0.6], [0.8, 0.6], [0.8, 0.6], [0.8, 0.6],
+      [0.8, 0.5], [0.6, 0.5], [0.5, 0.5], [0.5, 0.4],
+      [0.4, 0.4], [0.4, 0.4], [0.4, 0.4], [0.4, 0.4]
+    ],
+    "active_fraction": 0.32,
+    "noise": 0.05
+  },
+  "asleep_probabilities": [
+    [0.70, 0.70], [0.85, 0.85], [0.90, 0.90], [0.90, 0.90],
+    [0.85, 0.85], [0.75, 0.75], [0.50, 0.50], [0.25, 0.28],
+    [0.12, 0.15], [0.07, 0.09], [0.05, 0.07], [0.05, 0.07],
+    [0.10, 0.12], [0.12, 0.14], [0.07, 0.09], [0.05, 0.07],
+    [0.05, 0.06], [0.05, 0.06], [0.05, 0.06], [0.05, 0.06],
+    [0.08, 0.08], [0.15, 0.15], [0.35, 0.35], [0.55, 0.55]
+  ],
+  "heat_gain_present_kw": 0.118,
+  "heat_gain_active_kw": 0.170,
+  "gain_w_per_m2": 13
+}

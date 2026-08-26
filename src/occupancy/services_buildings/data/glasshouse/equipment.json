@@ -1,0 +1,53 @@
+{
+  "_comment": "Illustrative power ratings, general domain knowledge only -- no cited source, see schedule.json's _comment. `climate_control_systems`, `supplemental_grow_lighting`, and `irrigation_pumps` all use `strategy_params.gate: \"none\"` (see core/equipment.py's `_gate_mask`) so they run on their own internal schedule regardless of whether any occupant is present -- the first use of that gate value in this package outside `hotel`'s `laundry` item (which uses the same mechanism for a different reason: batch laundry cycles that don't track guest presence hour-by-hour either). `climate_control_systems` weights are elevated overnight (frost-protection heating) and around midday (ventilation/cooling), lower in the shoulder hours -- a plausible shape, not measured. `supplemental_grow_lighting` models a common ~16h 'long-day' photoperiod (06:00-22:00), a standard horticultural lighting practice for many greenhouse crops, not a specific crop's real schedule. `irrigation_pumps` concentrates its firing probability in the morning (avoiding evening/overnight watering, standard practice to limit foliar-disease risk). `staff_area_plug_loads` mirrors `warehouse`'s own small-admin-office item.",
+  "climate_control_systems": {
+    "category": "process",
+    "rated_power_kw": 8.0,
+    "standby_power_kw": 2.0,
+    "strategy": "probabilistic_event",
+    "strategy_params": { "gate": "none", "intercept": 1.0 },
+    "weekday": [0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.6, 0.5,
+                0.5, 0.5, 0.6, 0.8, 0.9, 0.9, 0.8, 0.6,
+                0.5, 0.5, 0.5, 0.5, 0.6, 0.7, 0.8, 0.8],
+    "weekend": [0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.6, 0.5,
+                0.5, 0.5, 0.6, 0.8, 0.9, 0.9, 0.8, 0.6,
+                0.5, 0.5, 0.5, 0.5, 0.6, 0.7, 0.8, 0.8]
+  },
+  "supplemental_grow_lighting": {
+    "category": "lighting",
+    "rated_power_kw": 10.0,
+    "standby_power_kw": 0.0,
+    "strategy": "probabilistic_event",
+    "strategy_params": { "gate": "none", "intercept": 1.0 },
+    "weekday": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0],
+    "weekend": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0]
+  },
+  "irrigation_pumps": {
+    "category": "process",
+    "rated_power_kw": 3.0,
+    "standby_power_kw": 0.0,
+    "strategy": "probabilistic_event",
+    "strategy_params": { "gate": "none", "intercept": 0.4 },
+    "weekday": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                1.0, 1.0, 1.0, 1.0, 0.0, 0.5, 0.5, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "weekend": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                1.0, 1.0, 1.0, 1.0, 0.0, 0.5, 0.5, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  },
+  "staff_area_plug_loads": {
+    "category": "plug_load",
+    "rated_power_kw": 0.08,
+    "standby_power_kw": 0.0,
+    "strategy": "linear_in_occupants",
+    "strategy_params": { "weekend_multiplier": 1.0 },
+    "weekday": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    "weekend": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  }
+}

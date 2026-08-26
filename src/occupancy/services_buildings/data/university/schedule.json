@@ -1,0 +1,24 @@
+{
+  "_comment": "Distinct from the `school` type (primary/secondary): a university/college academic building's teaching spaces are occupied per rolling class-registration schedules rather than one whole-building timetable, so no single classroom is ever close to full occupancy at once, and evening classes push occupancy well past a school's typical close time. occupancy_fraction is this repo's own interpolation anchored on the classroom day-shape reported in Bae, Yoon, Jung, Malhotra & Im (Oak Ridge National Laboratory / DOE public-access manuscript, 'Occupancy Schedule Development and its Effect on OpenStudio Prototype College Building Model') -- an actual class-reservation-schedule study across 10 US universities. That paper reports the updated classroom schedule (their Figure 10) starts at 8 a.m. (vs. a naively-reused school schedule's 9 a.m.), peaks below 50% occupancy ('fewer than 50% of the classrooms in the college building are occupied at the same time'), dips during lunch and dinner hours, and rises again from 6-7 p.m. because of evening classes -- all reproduced qualitatively below; classroom is the paper's single largest teaching-space type by floor area (21.1%, their Table 1), used here as a whole-building day-shape proxy rather than a formal area-weighted blend of all their published space types (classroom/laboratory/art classroom/lecture hall each have their own, more sharply-peaked curves in the source). closed_months hard-closes July-August (matches `school`'s own mechanism): the source paper's own summer-session data shows sharply reduced but nonzero activity (e.g. classroom ~16% peak, art classroom ~6%, lecture hall/laboratory near 0) -- `hourly_occupancy_curve`'s `closed_months` can only express full closure, not a dampened-but-open month, so summer is approximated as fully closed, same known simplification as `school`; see `.claude/services/open.md`. capacity_default, heat_gain_present_kw/heat_gain_active_kw, active_fraction, and gain_w_per_m2 have no direct figure in the source paper (which reports per-space-type occupant counts, not a single whole-building figure) -- illustrative choices of this repo's own: capacity_default (800) is a round figure in the neighborhood of summing the paper's Figure 14(a) per-space-type nominal-maximum occupant counts (classroom/lecture hall/laboratory/art classroom/office/conference/lounge/media center) under the updated schedule, not a literal sum; gain_w_per_m2 (11 W/m^2) starts from the same ASHRAE 90.1 Table 9.5.1 'School/University' lighting power density `school` already cites (~9.4 W/m^2, rounded to 9) plus a modest margin for the lab/studio/AV equipment that occupies a much larger floor-area share here (labs 8.4% + art/studio 18.7%, vs. a typical school) than a plain classroom lighting figure alone would capture.",
+  "id": "university",
+  "description": "University / college academic building. Weekday term-time hours 8 a.m. to ~9 p.m. (rolling class schedules keep any single hour's occupancy below half of capacity, with evening classes unlike a primary/secondary school), closed weekends and July-August.",
+  "region": "NL",
+  "capacity_default": 800,
+  "generator": "hourly_occupancy_curve",
+  "generator_params": {
+    "occupancy_fraction": [
+      [0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0],
+      [0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0],
+      [0.28, 0.0], [0.40, 0.0], [0.42, 0.0], [0.35, 0.0],
+      [0.28, 0.0], [0.35, 0.0], [0.42, 0.0], [0.42, 0.0],
+      [0.35, 0.0], [0.22, 0.0], [0.30, 0.0], [0.30, 0.0],
+      [0.15, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]
+    ],
+    "active_fraction": 0.85,
+    "noise": 0.05,
+    "closed_months": [7, 8]
+  },
+  "heat_gain_present_kw": 0.095,
+  "heat_gain_active_kw": 0.130,
+  "gain_w_per_m2": 11
+}

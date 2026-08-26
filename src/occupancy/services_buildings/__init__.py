@@ -10,11 +10,14 @@ here that calls ``load_building_type("<type>")``.
 from occupancy.services_buildings import (
     bakery,
     clinic,
+    glasshouse,
+    hospital,
     hotel,
     office,
     restaurant,
     school,
     supermarket,
+    university,
     warehouse,
 )
 from occupancy.services_buildings.building_profile import (
@@ -34,11 +37,14 @@ __all__ = [
     "bakery",
     "clinic",
     "get_building_type",
+    "glasshouse",
+    "hospital",
     "hotel",
     "office",
     "register_building_type",
     "restaurant",
     "school",
     "supermarket",
+    "university",
     "warehouse",
 ]

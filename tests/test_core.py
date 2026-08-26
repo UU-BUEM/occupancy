@@ -285,6 +285,34 @@ def test_hourly_occupancy_curve_respects_closed_months() -> None:
     assert (frame.loc[~is_january, "n_present"] > 0).any()
 
 
+def test_hourly_occupancy_curve_zero_cells_stay_zero_despite_noise() -> None:
+    """A curve cell of exactly 0.0 (e.g. an all-zero weekend column -- the
+    only way this generator can express full weekly closure, since it has
+    no ``closed_weekends`` param of its own) must stay deterministically
+    zero even with ``noise > 0``. Before this was fixed, Gaussian jitter
+    centered on a 0.0 base landed positive about half the time, giving a
+    supposedly-closed hour a coin-flip's chance of a few phantom
+    occupants -- caught while adding
+    :func:`occupancy.services_buildings.university`, which relies on an
+    all-zero weekend column (`fixed_schedule`'s equivalent guarantee is
+    covered by ``test_fixed_schedule_respects_hours_weekends_and_closed_months``,
+    which never hit this bug because that generator only adds jitter when
+    ``is_open`` is already true)."""
+    index = _index(24 * 10)  # spans a weekend
+    curve = np.zeros((24, 2))
+    curve[:, 0] = 0.8  # weekday: 80% occupied every hour; weekend: closed
+    ctx = OccupancyGenerationContext(
+        size=50,
+        index=index,
+        rng=np.random.default_rng(7),
+        params={"occupancy_fraction": curve, "noise": 0.2},
+    )
+    frame = hourly_occupancy_curve(ctx)
+    is_weekend = index.weekday >= 5
+    assert (frame.loc[is_weekend, "n_present"] == 0).all()
+    assert (frame.loc[~is_weekend, "n_present"] > 0).any()
+
+
 def _equipment_context(profile: pd.DataFrame) -> EquipmentContext:
     return EquipmentContext(
         profile=profile,

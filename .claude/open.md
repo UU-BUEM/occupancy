@@ -128,8 +128,14 @@ items: `services/open.md`.
   Gap 1 (per-occupant-kW-only internal gains, no floor-area normalization):
   `to_buem_profiles()` gained optional `floor_area_m2`/`gain_w_per_m2`
   kwargs that blend an area-driven component into `Q_ig` rather than
-  replacing the occupant-driven one; all 8 service-building types now carry
-  an illustrative `gain_w_per_m2`. **Still open on buem's side**: nothing
+  replacing the occupant-driven one; all 8 service-building types at the
+  time carried an illustrative `gain_w_per_m2`. **Update (2026-08-20):**
+  no longer universal — `glasshouse` (one of three new types added that
+  round, see `services/resolved.md`) deliberately leaves `gain_w_per_m2`
+  unset (`None`, no cited lighting-density source exists for a
+  greenhouse); `to_buem_profiles(floor_area_m2=...)` raises `ValueError`
+  for it unless a caller passes `gain_w_per_m2=` explicitly. **Still open
+  on buem's side**: nothing
   forwards `A_ref`/`computed_A_ref()` into the `floor_area_m2` kwarg yet —
   `AttributeBuilder.generate_electricity_profile()` would need that wiring
   (and note it runs before `CfgBuilding.to_cfg_dict()` computes the real

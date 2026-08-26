@@ -1,0 +1,53 @@
+{
+  "_comment": "No thermal/HVAC loads here -- that stays buem's job. `lighting`/`general_appliances` hourly weekday/weekend weight arrays are Ahmed, Akhondzada, Kurnitski & Olesen (2017, Sustainable Cities and Society 35:134-144) Table 8 and Table 7 'Hospital' columns respectively (same source as schedule.json's occupancy curve). Used here as `probabilistic_event` per-hour firing-probability arrays with `gate: \"none\"` (schedule-driven, not occupancy-gated -- matching Ahmed et al.'s own always-on-a-schedule treatment of these loads, distinct from every other type's equipment in this package, which gates on presence/activity); `expected_probabilistic_event`'s E[power] = standby + probability * (rated - standby) formula then reproduces their intended continuous-usage-rate semantics in expectation, with `standby_power_kw: 0.0` so any given hour is stochastically either fully off or fully on rather than a smooth blend (same simplification as every other item in this file). `diagnostic_monitoring_equipment` and `kitchen` have no Ahmed et al. equivalent (that source doesn't split equipment by department) -- illustrative additions: the former scales up `clinic`'s own `medical_equipment` item for continuous 24/7 diagnostic/monitoring-gear draw (informed loosely by an AI-summarized synthesis of ASHRAE 90.1/Fundamentals-style equipment-power-density figures for hospital departments, cross-checked only for plausible order of magnitude, not independently verified against the primary standard text); the latter reflects the real kitchen this repo's Dobosi, Tanasa, Kaba, Retezan & Mihaila (2019, E3S Web of Conferences 111, 06073) case-study hospital lists in its basement floor plan (Table 1), meal-prep-weighted around breakfast/lunch/dinner service. Illustrative power ratings throughout, not calibrated against real hospital metering.",
+  "lighting": {
+    "category": "lighting",
+    "rated_power_kw": 25.0,
+    "standby_power_kw": 0.0,
+    "strategy": "probabilistic_event",
+    "strategy_params": { "gate": "none", "intercept": 1.0 },
+    "weekday": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+                0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9,
+                0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
+    "weekend": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+                0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75, 0.75,
+                0.65, 0.65, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+  },
+  "general_appliances": {
+    "category": "plug_load",
+    "rated_power_kw": 12.0,
+    "standby_power_kw": 0.0,
+    "strategy": "probabilistic_event",
+    "strategy_params": { "gate": "none", "intercept": 1.0 },
+    "weekday": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.7,
+                0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9,
+                0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.4],
+    "weekend": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.45,
+                0.63, 0.63, 0.63, 0.63, 0.63, 0.63, 0.63, 0.63,
+                0.52, 0.52, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4]
+  },
+  "diagnostic_monitoring_equipment": {
+    "category": "medical",
+    "rated_power_kw": 15.0,
+    "standby_power_kw": 0.0,
+    "strategy": "flat_always_on",
+    "strategy_params": {},
+    "weekday": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    "weekend": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  },
+  "kitchen": {
+    "category": "kitchen",
+    "rated_power_kw": 10.0,
+    "standby_power_kw": 1.0,
+    "strategy": "probabilistic_event",
+    "strategy_params": { "gate": "present", "intercept": 1.0 },
+    "weekday": [0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 0.6, 0.8,
+                0.4, 0.3, 0.5, 0.8, 0.9, 0.5, 0.2, 0.2,
+                0.4, 0.7, 0.9, 0.5, 0.2, 0.1, 0.1, 0.1],
+    "weekend": [0.1, 0.1, 0.1, 0.1, 0.1, 0.3, 0.6, 0.8,
+                0.4, 0.3, 0.5, 0.8, 0.9, 0.5, 0.2, 0.2,
+                0.4, 0.7, 0.9, 0.5, 0.2, 0.1, 0.1, 0.1]
+  }
+}

@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Three new service-building types: `hospital` (24/7 inpatient, distinct
+  from the existing outpatient `clinic`), `university` (college academic
+  building, distinct from the existing primary/secondary `school`), and
+  `glasshouse` (horticultural greenhouse). `hospital`/`university` use the
+  `hourly_occupancy_curve` generator (like `hotel`); `hospital` also
+  carries real `asleep_probabilities` (inpatients sleep overnight, same
+  mechanism as `hotel`). See each type's `schedule.json`/`equipment.json`
+  `_comment` for full source citations (Ahmed et al. 2017; Dobosi et al.
+  2019; an ORNL/DOE college-building occupancy-schedule study) and
+  `.claude/services/resolved.md`'s 2026-08-20 round for a summary;
+  `glasshouse` has no cited source (flagged explicitly in its files) and
+  is the first type to leave `gain_w_per_m2` unset.
+
+### Fixed
+
+- `core.occupancy_engine.hourly_occupancy_curve`: an hour whose base
+  occupancy fraction is exactly `0.0` (e.g. the all-zero weekend column
+  the new `university` type relies on for full weekly closure) no longer
+  gets Gaussian jitter added to it — it now stays deterministically `0.0`,
+  matching `fixed_schedule`'s existing guarantee for its own closed hours.
+  Previously a positive noise draw could give a supposedly-closed hour a
+  coin-flip's chance of a few phantom occupants. `hotel` (the only prior
+  consumer of this generator) is unaffected — its curve has no
+  exactly-zero cells.
+
 ## [5.0.0] - 2026-08-18
 
 ### Changed

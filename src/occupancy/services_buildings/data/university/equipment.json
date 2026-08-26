@@ -1,0 +1,37 @@
+{
+  "_comment": "Illustrative power ratings, not calibrated. `cafeteria_kitchen` reflects the real cafeteria this repo's source paper (Bae et al., see schedule.json's _comment) maps its own `Cafe_OCC_SCH` schedule onto (borrowed, in that paper, from the secondary-school prototype's cafeteria) -- weighted around lunch (11-13h) with a lighter evening slot (17-19h) for the evening-class population school's own kitchen item doesn't need. `classroom_lab_studio_equipment` scales up `school`'s `classroom_equipment` item to cover the broader classroom/laboratory/studio/lecture-hall AV and lab-instrumentation mix this building type spans. `faculty_office_it_equipment` mirrors `office`/`clinic`/`warehouse`'s own admin plug-load item, scaled for this type's `capacity_default`.",
+  "classroom_lab_studio_equipment": {
+    "category": "plug_load",
+    "rated_power_kw": 20.0,
+    "standby_power_kw": 0.0,
+    "strategy": "probabilistic_event",
+    "strategy_params": { "gate": "present", "intercept": 1.0, "active_fraction_scale": 0.0 },
+    "weekday": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    "weekend": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  },
+  "cafeteria_kitchen": {
+    "category": "kitchen",
+    "rated_power_kw": 9.0,
+    "standby_power_kw": 0.5,
+    "strategy": "probabilistic_event",
+    "strategy_params": { "gate": "present", "intercept": 1.0, "active_fraction_scale": 0.0 },
+    "weekday": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.2, 0.15, 0.2, 0.6, 1.0, 0.7, 0.2, 0.15,
+                0.15, 0.3, 0.5, 0.5, 0.2, 0.0, 0.0, 0.0],
+    "weekend": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  },
+  "faculty_office_it_equipment": {
+    "category": "plug_load",
+    "rated_power_kw": 0.10,
+    "standby_power_kw": 0.0,
+    "strategy": "linear_in_occupants",
+    "strategy_params": { "weekend_multiplier": 1.0 },
+    "weekday": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    "weekend": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+                1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  }
+}
