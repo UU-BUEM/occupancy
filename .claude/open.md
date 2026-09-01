@@ -4,6 +4,28 @@ Household-specific items: `residential/open.md`. Service-building-specific
 items: `services/open.md`.
 
 ## >>> NEXT MAJOR TASKS <<<
+- [buem-linkage] **Household internal gains now scale with `num_persons`;
+  findings written up for buem, not yet raised (2026-08-28)** — see
+  `.claude/buem_household_scaling_findings.md`, the mirror of buem's own
+  still-unraised `.claude/occupancy_service_scaling_request.md`. Since
+  buem removed the `Q_ia` presence rescaling (`Q_ia = Q_ig + elecLoad`),
+  `occ_nothome`/`occ_sleeping` carry no headcount by construction, so
+  `Q_ig` and `elecLoad` are the only carriers — and `elecLoad`, the
+  dominant term at 70% of `Q_ia`, moved only ×1.40 across 1-5 occupants
+  because every household appliance keyed off `percent_active` (a
+  fraction). New per-item `occupant_scaling` exponent fixes it (×2.20,
+  `Q_ia` ×2.47→×3.03); details in `residential/open.md`. **Still to do**:
+  raise the document with buem, and ask buem to re-run `validation.py` —
+  every multi-occupant dwelling now gets more internal gain, so modelled
+  heating demand drops and the known buem-vs-CBS overshoot should narrow.
+- [services_buildings] **`occupant_scaling` is available to service
+  buildings but not applied to them (2026-08-28)** — the mechanism lives
+  in the shared `core/equipment.py`, so buem's
+  `occupancy_service_scaling_request.md` item 1 (40× capacity moving
+  annual electricity only ×1.46, same root cause as the household bug
+  above) is now a per-type **data** change in
+  `services_buildings/data/<type>/equipment.json`, not an engine change.
+  Deliberately out of scope for the households round; nothing blocks it.
 - [region] **Multi-region data** — `region` is threaded through
   `OccupancyResult` and archetype/building-type JSON, but only one
   region's data (`NL`) is populated. Adding a new region is a config

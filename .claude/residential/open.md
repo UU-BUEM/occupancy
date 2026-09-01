@@ -1,6 +1,28 @@
 # Open issues / TODOs — households
 
 ## >>> NEXT MAJOR TASKS <<<
+- [households] **`ownership_probability` is household-size-independent —
+  the remaining half of the person-count gap (2026-08-28)** — a real
+  5-person household is likelier to own a dishwasher, a tumble dryer and
+  a second TV than a 1-person one; here every household draws ownership
+  from the same size-blind CREST marginal
+  (`ElectricityConsumptionProfile._owned_by_name`). This is why annual
+  electricity now moves ×2.20 across 1-5 occupants against roughly ×2.75
+  in published NL averages, and the shortfall was deliberately **not**
+  closed by inflating `occupant_scaling` past 1.0 (above 1.0 an
+  appliance's usage would grow faster than the number of people using
+  it — not a real effect). Closing it properly needs ownership rates
+  conditioned on household size; CREST's workbook may carry them, worth
+  checking before synthesizing anything. See
+  `.claude/buem_household_scaling_findings.md` item 1 for the full
+  measurement and `resolved.md` for the `occupant_scaling` change itself.
+- [households] **No household-size-resolved electricity validation data**
+  — CBS 81528NED (logged as this repo's residential validation
+  reference) breaks down by *dwelling type*, not household size, so it
+  cannot validate the `num_persons` axis at all. The ~×2.75 yardstick
+  used above is published NL averages, an order-of-magnitude check only.
+  Sourcing a real size-resolved NL/EU table would turn the item above
+  from "roughly right direction" into an actual calibration.
 - [households] **More archetypes / real calibration** — the 5 current
   archetypes (`generic`, `working_couple`, `family_with_children`,
   `retired_single`, `student_shared`) have illustrative, hand-authored

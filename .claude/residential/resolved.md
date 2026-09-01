@@ -2,6 +2,39 @@
 
 Do not re-raise. "BY-DESIGN" are deliberate choices.
 
+## household size finally reaches internal gains (2026-08-28)
+
+- **Every household appliance was household-size-blind → per-item
+  `occupant_scaling` exponent.** `probabilistic_event`'s firing
+  probability keyed only off `percent_active` (`n_active / n_present`, a
+  fraction that is 1.0 whether one person of one or five of five is
+  active) plus an `n_active > 0` gate; `linear_in_occupants` existed but
+  no household item used it, so 100% of household rated power was
+  person-count-independent and annual electricity moved ×1.40 across 1-5
+  occupants. `core/equipment.py` now multiplies the probability by
+  `max(gate_count, 1) ** α` (`_occupant_multiplier`), with `_gate_mask`
+  returning the absolute `gate_count` alongside the intensive
+  `percent_active`. α defaults to `0.0` = previous behavior bit for bit,
+  so service buildings are untouched. Result: elec ×2.20, `Q_ia` ×3.03
+  (was ×2.47). The α *tiers* are this repo's own assignment by how shared
+  each appliance is, **not** CREST figures — CREST's headcount dependence
+  lives in its 10-minute activity/TPM tables, which this repo does not
+  reproduce. See `households/data/equipment.json`'s
+  `_occupant_scaling_comment` and `.claude/buem_household_scaling_findings.md`.
+- **BY-DESIGN: α is capped at 1.0.** An exponent above 1 means an
+  appliance's usage grows faster than the number of people generating it.
+  The residual gap to the ~×2.75 published yardstick is left open and
+  attributed to size-independent `ownership_probability` (see
+  `open.md`), not papered over by inflating exponents.
+- **BY-DESIGN: household archetypes keep `gain_w_per_m2: null`.**
+  Households already get real equipment and lighting gains through
+  `elecLoad`, which buem adds into `Q_ia` directly; an area-normalized
+  density on top would double-count the same equipment. Service buildings
+  use the area path because their equipment model is coarser. The field
+  is now propagated correctly by
+  `ElectricityConsumptionProfile.to_result()` (it was silently dropped),
+  but deliberately left unpopulated for households.
+
 ## households restructuring — fixed/settled
 - `fridge`, `ironing`, `other` were hardcoded in
   `electricity_consumption.py` with no JSON representation → now

@@ -4,6 +4,69 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-08-28
+
+### Changed
+
+- **Behavior change**: household electricity demand now scales with
+  `num_persons`. Previously every one of the 29 household appliances was
+  household-size-blind — firing probability keyed off `percent_active`
+  (`n_active / n_present`, a *fraction* that is 1.0 whether one person of
+  one is active or five of five) plus an `n_active > 0` gate — so annual
+  electricity moved only ×1.40 across 1-5 occupants. It now moves ×2.20,
+  against roughly ×2.75 in published NL averages by household size.
+  Single-occupant households are unaffected (identical output, same
+  seed); every multi-occupant household draws more.
+
+  This matters beyond the electricity figure: `buem` forms internal air
+  gains as `Q_ia = Q_ig + elecLoad` with no presence rescaling, and
+  `occ_nothome`/`occ_sleeping` are dimensionless occupant fractions, so
+  `Q_ig` and `elecLoad` are the *only* carriers of occupant count into
+  the thermal model. `elecLoad` is the dominant term (70% of `Q_ia` at
+  one occupant). Combined `Q_ia` scaling across 1-5 occupants goes ×2.47
+  → ×3.03. Downstream heating demand for multi-occupant dwellings will
+  fall accordingly. Full measurement in
+  `.claude/buem_household_scaling_findings.md`.
+
+### Added
+
+- `occupant_scaling` — optional per-item `strategy_params` exponent α in
+  the shared equipment model (`core/equipment.py`), multiplying an
+  item's firing probability by `max(gate_count, 1) ** α`, and its session
+  count for `sessions_per_week` items. α defaults to `0.0`, which
+  reproduces the previous behavior bit for bit under the same seed, so
+  the engine change is backward compatible and service buildings (which
+  do not set it) are unaffected. The 22 occupancy-driven household
+  appliances are assigned to four sharing tiers: `1.0` per-person
+  consumables (laundry, dishwasher, kettle, PC, iron), `0.5`
+  partly-shared activities (cooking, vacuum, secondary TVs), `0.3`
+  mostly-shared (lighting, printer), `0.15` one-per-household items (main
+  TV, hi-fi). The 7 `flat_always_on` cold appliances and standby
+  electronics are exempt by design. `1.0` is a deliberate ceiling — above
+  it an appliance's usage would grow faster than the number of people
+  using it. Rationale and provenance are in
+  `households/data/equipment.json`'s own `_occupant_scaling_comment`;
+  these tier assignments are this repo's own, **not** CREST figures.
+
+### Fixed
+
+- `ElectricityConsumptionProfile.to_result()` dropped `gain_w_per_m2`
+  from the archetype spec, though `HouseholdProfile.to_result()` carried
+  it. Since `to_buem_profiles()` requires a `total_power_kwh` column, the
+  electricity path is the only household route into it, so passing
+  `floor_area_m2=` for a household always raised "no gain_w_per_m2 is
+  available" regardless of what the archetype defined. Currently latent
+  (all five household archetypes leave `gain_w_per_m2` null — households
+  get their real equipment/lighting gains through `elecLoad`, and adding
+  an area-normalized density on top would double-count them), but the
+  two `to_result()` methods no longer disagree.
+- `core/buem_adapter.py`'s module docstring documented a superseded
+  `Q_ia = (Q_ig + elecLoad) * (occ * (1 - occ_sleeping) + 0.5 *
+  occ_sleeping)` formula; buem removed that presence rescaling. The
+  docstring now states the real contract and its consequence — with no
+  presence reweighting downstream, `Q_ig` and `elecLoad` must carry the
+  occupant-count dependence themselves.
+
 ## [5.0.0] - 2026-08-18
 
 ### Changed
