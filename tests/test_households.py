@@ -121,6 +121,57 @@ def test_to_result_carries_archetype_heat_gain() -> None:
     assert elec_result.heat_gain_present_kw == spec.heat_gain_present_kw
     assert elec_result.heat_gain_active_kw == spec.heat_gain_active_kw
     assert "total_power_kwh" in elec_result.profile.columns
+    # gain_w_per_m2 too: since to_buem_profiles() requires total_power_kwh,
+    # this is the only household path into it, so dropping the field here
+    # made floor_area_m2= unusable for every household regardless of what
+    # the archetype defined.
+    assert elec_result.gain_w_per_m2 == spec.gain_w_per_m2
+    assert bare_result.gain_w_per_m2 == spec.gain_w_per_m2
+
+
+def test_electricity_scales_with_household_size() -> None:
+    """Regression guard for the person-count gap: before
+    ``occupant_scaling`` existed, every household appliance keyed only off
+    ``percent_active`` -- a fraction, invariant in household size -- so
+    annual electricity moved just 1.40x across 1-5 occupants while
+    published NL averages move ~2.75x. Both the per-step load and the
+    annual total must now grow monotonically with ``num_persons``."""
+    annual = []
+    for num_persons in range(1, 6):
+        household = HouseholdProfile(
+            num_persons=num_persons, year=2025, seed=42
+        )
+        profile = ElectricityConsumptionProfile(
+            occupancy_profile=household, seed=42
+        ).get_profile()
+        annual.append(float(profile["total_power_kwh"].sum()))
+
+    assert annual == sorted(annual), annual
+    # Well clear of the 1.40x the fraction-only model produced, and short
+    # of a strictly linear 5x (real consumption is sublinear in headcount).
+    ratio = annual[-1] / annual[0]
+    assert 1.9 < ratio < 3.0, ratio
+
+
+def test_occupant_scaling_covers_every_non_always_on_appliance() -> None:
+    """Every appliance whose usage is occupancy-driven must declare an
+    ``occupant_scaling`` tier, so a newly added item cannot silently
+    reintroduce the household-size-blind behavior. ``flat_always_on``
+    items are exempt by design -- a fridge's draw is set by the fridge."""
+    equipment = default_equipment_table()
+    missing = sorted(
+        name
+        for name, spec in equipment.items()
+        if spec.strategy != "flat_always_on"
+        and "occupant_scaling" not in spec.strategy_params
+    )
+    assert not missing, missing
+
+    for name, spec in equipment.items():
+        alpha = spec.strategy_params.get("occupant_scaling", 0.0)
+        # 1.0 is the physical ceiling: usage cannot grow faster than the
+        # number of people generating it.
+        assert 0.0 <= alpha <= 1.0, (name, alpha)
 
 
 def test_equipment_table_is_config_driven_and_complete() -> None:

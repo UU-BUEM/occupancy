@@ -231,6 +231,14 @@ class ElectricityConsumptionProfile:
         the household-side counterpart needed for e.g.
         :func:`occupancy.core.buem_adapter.to_buem_profiles`, since a bare
         ``HouseholdProfile.to_result()`` has no equipment column.
+
+        Carries the same spec-derived gain fields as
+        ``HouseholdProfile.to_result()``, ``gain_w_per_m2`` included.
+        Since ``to_buem_profiles()`` requires ``total_power_kwh``, this is
+        the *only* household path into it, so dropping the field here
+        silently made ``floor_area_m2=`` unusable for every household --
+        it raised "no gain_w_per_m2 is available" no matter what the
+        archetype defined.
         """
         occ = self.occupancy_profile
         archetype_spec = get_archetype(occ.archetype)
@@ -242,4 +250,5 @@ class ElectricityConsumptionProfile:
             region=occ.region,
             heat_gain_present_kw=archetype_spec.heat_gain_present_kw,
             heat_gain_active_kw=archetype_spec.heat_gain_active_kw,
+            gain_w_per_m2=archetype_spec.gain_w_per_m2,
         )

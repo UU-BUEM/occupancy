@@ -5,10 +5,23 @@ to the internal-gains/occupancy input contract required by
 ``buem.thermal.model_buem.ModelBUEM._addPara``/``_addConstraints_sequential``
 raise ``ValueError`` unless ``cfg`` carries all four of ``Q_ig``, ``elecLoad``,
 ``occ_nothome``, ``occ_sleeping`` (each a ``pd.Series`` indexed like
-``cfg["weather"]``), and combines them per timestep as::
+``cfg["weather"]``), and forms internal air gains per timestep as::
 
-    occ = 1 - occ_nothome
-    Q_ia = (Q_ig + elecLoad) * (occ * (1 - occ_sleeping) + 0.5 * occ_sleeping)
+    Q_ia = Q_ig + elecLoad
+
+``occ_nothome``/``occ_sleeping`` are required and validated but do **not**
+rescale ``Q_ia``: both terms arrive here already scaled by real-time
+occupant presence (``Q_ig`` is built from present/active occupant *counts*
+below, so it is zero when the building is empty), and buem previously
+multiplied that through by a presence *fraction* a second time —
+double-discounting an already presence-scaled quantity. buem removed that
+step; this docstring documented the superseded formula until 2026-08-28.
+
+The practical consequence for this module: ``num_persons`` reaches buem's
+thermal model *only* through ``Q_ig`` and ``elecLoad``. Nothing downstream
+re-introduces a headcount dependence, so both terms have to carry it
+themselves — see ``core/equipment.py``'s ``_occupant_multiplier`` for the
+``elecLoad`` half.
 
 This module is the one place that knows how to turn occupant/equipment
 counts into that shape — see ``to_buem_profiles``.

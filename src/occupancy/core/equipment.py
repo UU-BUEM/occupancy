@@ -56,8 +56,19 @@ def _weight(spec: EquipmentSpec, ctx: EquipmentContext) -> np.ndarray:
 
 def _gate_mask(
     spec: EquipmentSpec, ctx: EquipmentContext
-) -> tuple[np.ndarray, np.ndarray]:
-    """Return (mask, percent_active) for the strategy's configured gate."""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return ``(mask, percent_active, gate_count)`` for the strategy's
+    configured gate.
+
+    ``gate_count`` is the *absolute* occupant count the gate keys off
+    (``n_active`` for ``gate="active"``, ``n_present`` otherwise) — the
+    extensive counterpart to the intensive ``percent_active``, and the
+    quantity :func:`_occupant_multiplier` scales usage by. Keeping both
+    is the point: ``percent_active`` says *what share* of the people
+    present are up and about, ``gate_count`` says *how many* there are,
+    and only the latter distinguishes a one-person household from a
+    five-person one.
+    """
     n_present = ctx.profile["n_present"].to_numpy(dtype=float)
     n_active = ctx.profile["n_active"].to_numpy(dtype=float)
     percent_active = np.divide(
@@ -67,16 +78,46 @@ def _gate_mask(
     gate = spec.strategy_params.get("gate", "active")
     if gate == "active":
         mask = n_active > 0
+        gate_count = n_active
     elif gate == "present":
         mask = n_present > 0
+        gate_count = n_present
     else:
         mask = np.ones(len(n_present), dtype=bool)
+        gate_count = n_present
 
     band = spec.strategy_params.get("activity_band")
     if band is not None:
         mask = mask & (percent_active > band[0]) & (percent_active < band[1])
 
-    return mask, percent_active
+    return mask, percent_active, gate_count
+
+
+def _occupant_multiplier(
+    spec: EquipmentSpec, counts: np.ndarray
+) -> np.ndarray | float:
+    """Usage multiplier from the ``occupant_scaling`` exponent α:
+    ``max(counts, 1) ** α``.
+
+    Without this, an item's firing probability depends only on *whether*
+    someone is active and on ``percent_active`` — both invariant in
+    household size, so a five-person household ran its washing machine
+    exactly as often as a one-person household (see
+    ``.claude/residential/open.md`` and
+    ``.claude/buem_household_scaling_findings.md``).
+
+    α is per item because appliances differ in how much they are shared:
+    α ``0.0`` (the default, and the pre-existing behavior bit for bit)
+    for an item one household owns and runs regardless of headcount;
+    α ``1.0`` for a strictly per-person consumable, where twice the
+    people means twice the cycles; intermediate values for partial
+    sharing. Clamping at 1 leaves unoccupied timesteps untouched — the
+    gate mask, not this multiplier, is what zeroes them.
+    """
+    alpha = float(spec.strategy_params.get("occupant_scaling", 0.0))
+    if alpha == 0.0:
+        return 1.0
+    return np.power(np.maximum(counts, 1.0), alpha)
 
 
 def _event_probability(
@@ -88,7 +129,7 @@ def _event_probability(
     ``spec``/``ctx`` — the only randomness in ``probabilistic_event`` is
     the single Bernoulli draw made from this probability afterwards."""
     params = spec.strategy_params
-    mask, percent_active = _gate_mask(spec, ctx)
+    mask, percent_active, gate_count = _gate_mask(spec, ctx)
 
     if "weekday_rate" in params:
         base_prob = np.where(
@@ -105,7 +146,13 @@ def _event_probability(
             + params.get("active_fraction_scale", 0.0) * percent_active
         )
 
-    probability = np.clip(base_prob * _weight(spec, ctx), 0.0, 1.0)
+    probability = np.clip(
+        base_prob
+        * _weight(spec, ctx)
+        * _occupant_multiplier(spec, gate_count),
+        0.0,
+        1.0,
+    )
     probability = np.where(mask, probability, 0.0)
     return probability, mask
 
@@ -124,8 +171,13 @@ def probabilistic_event(
       ``intercept + active_fraction_scale * percent_active``, or
     - ``weekday_rate`` / ``weekend_rate``: flat base rate per day-type,
       optionally bumped by ``day_bonus: [{"days": [2, 3], "amount": 0.05}]``.
+    - ``occupant_scaling``: exponent α on the gate's occupant count (see
+      :func:`_occupant_multiplier`), 0.0 by default. The only parameter
+      here that responds to *how many* occupants there are rather than
+      what share of them is active.
     Either base-rate mode is then multiplied by the spec's
-    ``weekday``/``weekend`` hourly weight array.
+    ``weekday``/``weekend`` hourly weight array and by the
+    ``occupant_scaling`` multiplier.
     """
     probability, mask = _event_probability(spec, ctx)
 
@@ -148,11 +200,28 @@ def _session_placement(
     :func:`expected_sessions_per_week`: the eligible (``n_active > 0``)
     hour indices and the deterministic session count (only the
     *placement* among eligible hours is randomized, via
-    ``ctx.rng.choice(..., replace=False)`` in ``sessions_per_week``)."""
+    ``ctx.rng.choice(..., replace=False)`` in ``sessions_per_week``).
+
+    ``occupant_scaling`` (see :func:`_occupant_multiplier`) raises the
+    session *count* rather than a per-timestep probability — more people
+    means more ironing sessions per week, not a more powerful iron. The
+    multiplier uses the mean active-occupant count over eligible hours,
+    so it is a single deterministic scalar and both this function's
+    callers stay in agreement about how many sessions there are.
+    """
     n_active = ctx.profile["n_active"].to_numpy()
     possible_hours = np.where(n_active > 0)[0]
     sessions_per_wk = spec.strategy_params.get("sessions_per_week", 1)
-    n_sessions = int(len(ctx.profile) / (24 * 7) * sessions_per_wk)
+    scale = 1.0
+    if len(possible_hours) > 0:
+        scale = float(
+            np.asarray(
+                _occupant_multiplier(
+                    spec, np.array([n_active[possible_hours].mean()])
+                )
+            ).item()
+        )
+    n_sessions = int(len(ctx.profile) / (24 * 7) * sessions_per_wk * scale)
     return possible_hours, n_sessions
 
 

@@ -5,6 +5,7 @@ import pytest
 from occupancy.core.equipment import (
     EquipmentContext,
     EquipmentSpec,
+    _event_probability,
     flat_always_on,
     linear_in_occupants,
     probabilistic_event,
@@ -356,3 +357,106 @@ def test_probabilistic_event_zero_outside_gate() -> None:
     power = probabilistic_event(spec, _equipment_context(profile))
     assert power[0] == 0.0  # present but inactive -> gated out
     assert power[2] == 0.0  # not present -> gated out
+
+
+def test_occupant_scaling_defaults_to_no_change() -> None:
+    """A spec without ``occupant_scaling`` must behave exactly as it did
+    before the parameter existed — same seed, same draws, same power."""
+    common = {
+        "name": "cooking",
+        "rated_power_kw": 1.5,
+        "weekday": np.full(24, 1.0),
+        "weekend": np.full(24, 1.0),
+        "strategy": "probabilistic_event",
+    }
+    profile = _profile([3, 3, 3], [3, 2, 1])
+    without = EquipmentSpec(
+        **common, strategy_params={"gate": "active", "intercept": 0.3}
+    )
+    explicit_zero = EquipmentSpec(
+        **common,
+        strategy_params={
+            "gate": "active",
+            "intercept": 0.3,
+            "occupant_scaling": 0.0,
+        },
+    )
+    np.testing.assert_allclose(
+        probabilistic_event(without, _equipment_context(profile)),
+        probabilistic_event(explicit_zero, _equipment_context(profile)),
+    )
+
+
+def test_occupant_scaling_raises_probability_with_headcount() -> None:
+    """The whole point of ``occupant_scaling``: firing probability must
+    respond to *how many* occupants are active, not only to what share of
+    those present are active. ``percent_active`` is 1.0 in every row
+    below, so without this parameter all three would be identical."""
+    spec = EquipmentSpec(
+        name="washing_machine",
+        rated_power_kw=0.4,
+        weekday=np.full(24, 1.0),
+        weekend=np.full(24, 1.0),
+        strategy="probabilistic_event",
+        strategy_params={
+            "gate": "active",
+            "intercept": 0.2,
+            "occupant_scaling": 1.0,
+        },
+    )
+    profile = _profile([1, 2, 4], [1, 2, 4])
+    probability, _ = _event_probability(spec, _equipment_context(profile))
+    np.testing.assert_allclose(probability, [0.2, 0.4, 0.8])
+
+
+def test_occupant_scaling_is_sublinear_below_exponent_one() -> None:
+    spec = EquipmentSpec(
+        name="hob",
+        rated_power_kw=2.4,
+        weekday=np.full(24, 1.0),
+        weekend=np.full(24, 1.0),
+        strategy="probabilistic_event",
+        strategy_params={
+            "gate": "active",
+            "intercept": 0.1,
+            "occupant_scaling": 0.5,
+        },
+    )
+    profile = _profile([1, 4, 9], [1, 4, 9])
+    probability, _ = _event_probability(spec, _equipment_context(profile))
+    np.testing.assert_allclose(probability, [0.1, 0.2, 0.3])
+
+
+def test_occupant_scaling_leaves_empty_timesteps_gated_out() -> None:
+    """The gate mask, not the multiplier, is what zeroes unoccupied hours —
+    ``max(count, 1)`` must not resurrect a gated-out timestep."""
+    spec = EquipmentSpec(
+        name="kettle",
+        rated_power_kw=2.0,
+        weekday=np.full(24, 1.0),
+        weekend=np.full(24, 1.0),
+        strategy="probabilistic_event",
+        strategy_params={
+            "gate": "active",
+            "intercept": 1.0,
+            "occupant_scaling": 1.0,
+        },
+    )
+    profile = _profile([2, 0, 2], [2, 0, 0])
+    power = probabilistic_event(spec, _equipment_context(profile))
+    assert power[1] == 0.0  # nobody home
+    assert power[2] == 0.0  # present, but nobody active
+
+
+def test_occupant_scaling_raises_session_count_not_rated_power() -> None:
+    spec = EquipmentSpec(
+        name="ironing",
+        rated_power_kw=1.0,
+        strategy="sessions_per_week",
+        strategy_params={"sessions_per_week": 1, "occupant_scaling": 1.0},
+    )
+    n = 24 * 7 * 2  # two weeks
+    profile = _profile([4] * n, [4] * n)
+    power = sessions_per_week(spec, _equipment_context(profile))
+    assert int((power > 0).sum()) == 8  # 2 weeks x 1 session x 4 occupants
+    assert set(np.unique(power)) == {0.0, 1.0}  # power itself unchanged
