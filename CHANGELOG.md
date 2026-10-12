@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-10-12
+
 ### Added
 
 - `occupancy.MultiDwellingProfile` (`households/building.py`) — aggregates
