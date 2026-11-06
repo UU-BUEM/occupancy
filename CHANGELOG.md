@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.1.1] - 2026-11-06
+
+### Added
+
+- `CITATION.cff`: citation metadata for GitHub's "Cite this
+  repository" button and for Zenodo, which archives every release
+  from this version on and issues it a DOI.
+
 ## [6.1.0] - 2026-10-12
 
 ### Added
