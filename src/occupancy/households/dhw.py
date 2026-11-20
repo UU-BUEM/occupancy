@@ -8,8 +8,8 @@ only the mechanics; read ``docs/dhw/design.md`` before changing the
 method.
 
 **Scope, deliberately liters-only.** Per this repo's ownership-boundary
-convention (``CLAUDE.md``): occupancy owns occupant/equipment *behavior*
--- what gets drawn, and when; buem owns the temperature/delta-T/energy
+convention (``CONTRIBUTING.md``, "Scope"): occupancy owns
+occupant/equipment *behavior* -- what gets drawn, and when; buem owns the temperature/delta-T/energy
 math, once it has a DHW term to do that math for (it does not yet -- see
 ``docs/dhw/buem_engine_reference.md``). :func:`generate_dhw_draws`
 therefore returns liters, never kWh.

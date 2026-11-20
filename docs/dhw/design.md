@@ -243,7 +243,7 @@ event/volume draws, transition-weighted timing) are Dutch-specific in
 any way. If a specific region ever needs its own defaults (a different
 bathing-frequency culture, a different fixture mix), the extension path
 is the same one this repo already uses for archetypes and building types
-(`CLAUDE.md`): add a sibling file, e.g. `dhw_tapping_categories_DE.csv`,
+(`CONTRIBUTING.md`, "Extending occupancy"): add a sibling file, e.g. `dhw_tapping_categories_DE.csv`,
 rather than editing this one in place — `generate_dhw_draws()`'s
 `tapping_categories=` parameter already accepts any validated table, so
 wiring in a region-specific variant needs no code change either.

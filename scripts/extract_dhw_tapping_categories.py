@@ -174,8 +174,9 @@ _CSV_HEADER_COMMENT = """\
 # baselines, neither Dutch -- this table is not NTA-8800-specific and
 # is not expected to be. If per-region defaults are ever needed (e.g. for
 # Germany, Austria, Czech Republic), add a sibling file following this
-# repo's existing per-region convention (CLAUDE.md: new archetype/
-# building-type JSON per region) -- e.g. dhw_tapping_categories_DE.csv --
+# repo's existing per-region convention (CONTRIBUTING.md, "Extending
+# occupancy": new archetype/building-type JSON per region) -- e.g.
+# dhw_tapping_categories_DE.csv --
 # rather than editing this one in place.
 #
 # activity_link follows McKenna & Thomson's own fixture-to-activity

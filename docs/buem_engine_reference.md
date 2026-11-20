@@ -118,6 +118,7 @@ and how every standard reviewed treats DHW. occupancy's
 `generate_dhw_draws()` (`docs/dhw/design.md`) supplies the volume side of
 that (liters per hour, per fixture); the energy conversion
 (`V × ρ × c × ΔT`) needs a delivery-temperature assumption that belongs
-on buem's side of the ownership boundary (CLAUDE.md: occupancy owns
+on buem's side of the ownership boundary (`CONTRIBUTING.md`, "Scope":
+occupancy owns
 occupant/equipment behavior — volumes and timing; buem owns
 temperature/ΔT/energy math) once buem's own DHW work begins.

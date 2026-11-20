@@ -10,7 +10,9 @@ What was actually built — `core/`, `households/`, `services_buildings/`,
 the generator/equipment strategy registries, the Markov-chain generator,
 and the household archetypes — is implemented in the codebase. See:
 
-- `CLAUDE.md` — architecture overview, extension points, dev commands.
+- `README.md` — overview, repository layout, buem integration.
+- `CONTRIBUTING.md` — scope (what occupancy owns vs. buem), extension
+  points, dev commands.
 - `.claude/open.md` — active follow-ups (real regional survey data,
   service-building capacity config, more archetypes/building types).
 - `.claude/resolved.md` — what was fixed/settled during the restructuring,

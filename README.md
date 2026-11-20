@@ -30,9 +30,9 @@ Core models:
 Everything — occupancy probabilities, household archetypes, appliance/
 equipment specs, service-building schedules — is config-driven JSON, not
 hardcoded Python. Adding a new appliance, household archetype, or building
-type is a config addition; see `CLAUDE.md` and
-`docs/plans/equipment-service-buildings-architecture.md` for the extension
-points and design rationale.
+type is a config addition; see
+[CONTRIBUTING.md](CONTRIBUTING.md#extending-occupancy) for the extension
+points.
 
 ## Repository Layout
 
@@ -159,7 +159,9 @@ under each subpackage's own `data/` folder (`config/data/`,
 Pass a custom scenario JSON via `--config` to override any subset of the
 scenario/occupancy/electricity fields without touching the bundled defaults.
 Adding a new appliance, household archetype, or service-building type is a
-JSON addition — see `CLAUDE.md` for the registry mechanism.
+JSON addition — see
+[CONTRIBUTING.md](CONTRIBUTING.md#extending-occupancy) for the registry
+mechanism.
 
 ## Feeding buem
 

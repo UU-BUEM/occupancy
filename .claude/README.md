@@ -23,6 +23,7 @@ Pattern ported from `UU-BUEM/weather`, split by domain to mirror
   (building types, schedules, equipment).
 
 ## See also
-- `/CLAUDE.md` — architecture, layout, conventions, dev commands.
+- `/CLAUDE.md` — architecture, layout, conventions, dev commands. Local
+  only (gitignored); its public counterpart is `/CONTRIBUTING.md`.
 - `/docs/plans/equipment-service-buildings-architecture.md` — pointer to
   the restructuring's design rationale.

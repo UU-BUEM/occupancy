@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Documentation
+
+- `CONTRIBUTING.md` gains "Scope: What Belongs in occupancy" (what
+  occupancy models vs. what buem models) and "Extending occupancy" (how
+  to add appliances, archetypes, building types, generators and
+  regions). README, `docs/` and docstrings now point there.
+- `CLAUDE.md` is no longer part of the repository.
+
 ## [6.1.2] - 2026-11-20
 
 ### Added
