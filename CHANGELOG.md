@@ -10,7 +10,11 @@ All notable changes to this project will be documented in this file.
   occupancy models vs. what buem models) and "Extending occupancy" (how
   to add appliances, archetypes, building types, generators and
   regions). README, `docs/` and docstrings now point there.
-- `CLAUDE.md` is no longer part of the repository.
+- `CLAUDE.md` and the `.claude/` maintainer notes are no longer part of
+  the repository. Code comments, data-file notes, scripts and `docs/`
+  that pointed into `.claude/` now point to public sources instead
+  (`docs/dhw/design.md`, `households/data/equipment.json`'s `_comment`,
+  `CHANGELOG.md`).
 
 ## [6.1.2] - 2026-11-20
 

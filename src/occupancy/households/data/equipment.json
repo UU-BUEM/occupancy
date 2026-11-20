@@ -1,6 +1,6 @@
 {
   "_comment": "Household equipment specs. ownership_probability, rated_power_kw, standby_power_kw for the CREST-sourced items below (see _crest_source per item) are read from the CREST Domestic Electricity Demand Model 1.0e (Richardson, Thomson, Infield -- Loughborough University CREST), obtained via the paper's own public download link; the underlying power/cycle statistics there are themselves sourced from UK Market Transformation Programme Briefing Notes (Crown Copyright). The hourly weekday/weekend weight SHAPES are this repo's own illustrative arrays (not extracted from CREST's 10-minute activity/TPM tables), calibrated so each item's expected annual triggered-use energy matches CREST's reported figure. Water heating and Electric Space Heating categories are excluded deliberately -- those are thermal loads that belong to buem's domain, not this repo's.",
-  "_occupant_scaling_comment": "occupant_scaling (exponent on the gate's occupant count, see core.equipment._occupant_multiplier) is this repo's own assignment, NOT a CREST figure -- CREST's own headcount dependence lives in its 10-minute activity/TPM tables, which this repo does not reproduce. Each item is placed in one of four sharing tiers by whether an extra occupant brings their own use of it: 1.0 strictly per-person consumables (laundry loads, dishes, hot drinks, individual screen time); 0.5 partly-shared activities (one meal serves the household but grows with it); 0.3 mostly-shared (more rooms lit); 0.15 one-per-household items watched together. 1.0 is a deliberate ceiling -- above it, usage would grow faster than headcount. Before this field existed, every household item's firing probability keyed only off percent_active (a fraction, invariant in household size), so a 5-person household ran its washing machine as often as a 1-person one and annual electricity moved only 1.40x across 1-5 occupants. It now moves 2.20x, against roughly 2.75x in published NL averages by household size. The residual ~20% shortfall at 5 occupants is deliberately NOT closed by inflating these exponents past their physical meaning: it is attributed to ownership_probability being household-size-independent here (a 5-person household really is likelier to own a dishwasher, tumble dryer and second TV), which is a separate lever tracked in .claude/residential/open.md.",
+  "_occupant_scaling_comment": "occupant_scaling (exponent on the gate's occupant count, see core.equipment._occupant_multiplier) is this repo's own assignment, NOT a CREST figure -- CREST's own headcount dependence lives in its 10-minute activity/TPM tables, which this repo does not reproduce. Each item is placed in one of four sharing tiers by whether an extra occupant brings their own use of it: 1.0 strictly per-person consumables (laundry loads, dishes, hot drinks, individual screen time); 0.5 partly-shared activities (one meal serves the household but grows with it); 0.3 mostly-shared (more rooms lit); 0.15 one-per-household items watched together. 1.0 is a deliberate ceiling -- above it, usage would grow faster than headcount. Before this field existed, every household item's firing probability keyed only off percent_active (a fraction, invariant in household size), so a 5-person household ran its washing machine as often as a 1-person one and annual electricity moved only 1.40x across 1-5 occupants. It now moves 2.20x, against roughly 2.75x in published NL averages by household size. The residual ~20% shortfall at 5 occupants is deliberately NOT closed by inflating these exponents past their physical meaning: it is attributed to ownership_probability being household-size-independent here (a 5-person household really is likelier to own a dishwasher, tumble dryer and second TV), which is a separate lever not yet modeled.",
   "chest_freezer": {
     "name": "chest_freezer",
     "category": "cold_appliance",
@@ -1908,7 +1908,7 @@
       "intercept": 0.6,
       "occupant_scaling": 1.0
     },
-    "_source": "estimated, unsourced -- not CREST (2008 UK survey predates laptops' current ubiquity) and no NL ownership survey consulted. Distinct from personal_computer to represent a mobile per-person device rather than a shared desktop. Needs verification; see .claude/residential/open.md.",
+    "_source": "estimated, unsourced -- not CREST (2008 UK survey predates laptops' current ubiquity) and no NL ownership survey consulted. Distinct from personal_computer to represent a mobile per-person device rather than a shared desktop. Needs verification.",
     "weekday": [
       0.05, 0.01, 0.01, 0.01, 0.01, 0.01, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1,
       0.15, 0.15, 0.15, 0.15, 0.2, 0.4, 0.6, 0.7, 0.8, 0.7, 0.5, 0.2
@@ -1926,7 +1926,7 @@
     "ownership_probability": 0.5,
     "strategy": "flat_always_on",
     "strategy_params": {},
-    "_source": "estimated, unsourced -- not CREST (device class did not exist in 2008) and no NL ownership survey consulted. Needs verification; see .claude/residential/open.md.",
+    "_source": "estimated, unsourced -- not CREST (device class did not exist in 2008) and no NL ownership survey consulted. Needs verification.",
     "weekday": [
       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
@@ -1944,7 +1944,7 @@
     "ownership_probability": 0.98,
     "strategy": "flat_always_on",
     "strategy_params": {},
-    "_source": "estimated, unsourced -- not CREST (device class did not exist in its current always-on-broadband form in 2008) and no NL ownership survey consulted, though near-universal home-broadband penetration in NL makes 0.98 a low-risk estimate. Needs verification; see .claude/residential/open.md.",
+    "_source": "estimated, unsourced -- not CREST (device class did not exist in its current always-on-broadband form in 2008) and no NL ownership survey consulted, though near-universal home-broadband penetration in NL makes 0.98 a low-risk estimate. Needs verification.",
     "weekday": [
       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
@@ -1966,7 +1966,7 @@
       "intercept": 0.5,
       "occupant_scaling": 0.15
     },
-    "_source": "estimated, unsourced -- not CREST (device class did not exist in 2008) and no NL ownership survey consulted. Mirrors tv_1's presence-driven gate since it's watched alongside a TV. Needs verification; see .claude/residential/open.md.",
+    "_source": "estimated, unsourced -- not CREST (device class did not exist in 2008) and no NL ownership survey consulted. Mirrors tv_1's presence-driven gate since it's watched alongside a TV. Needs verification.",
     "weekday": [
       0.05, 0.01, 0.01, 0.01, 0.01, 0.01, 0.05, 0.1, 0.1, 0.1, 0.1, 0.1,
       0.15, 0.15, 0.15, 0.15, 0.2, 0.4, 0.6, 0.7, 0.8, 0.7, 0.5, 0.2
@@ -1988,7 +1988,7 @@
       "intercept": 0.08,
       "occupant_scaling": 0.3
     },
-    "_source": "estimated, unsourced -- not CREST (device class was a niche product in 2008) and no NL ownership survey consulted. Gated on 'none' rather than presence/activity since these are typically scheduled to run while occupants are away. Needs verification; see .claude/residential/open.md.",
+    "_source": "estimated, unsourced -- not CREST (device class was a niche product in 2008) and no NL ownership survey consulted. Gated on 'none' rather than presence/activity since these are typically scheduled to run while occupants are away. Needs verification.",
     "weekday": [
       0.05, 0.05, 0.05, 0.05, 0.05, 0.1, 0.15, 0.2, 0.2, 0.15, 0.1, 0.1,
       0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05, 0.05
@@ -2010,7 +2010,7 @@
       "intercept": 0.03,
       "occupant_scaling": 0.5
     },
-    "_source": "estimated, unsourced -- not CREST (device did not exist in its current form in 2008) and no NL ownership survey consulted. Weekday/weekend shape reused from the kitchen category's meal-time pattern. Needs verification; see .claude/residential/open.md.",
+    "_source": "estimated, unsourced -- not CREST (device did not exist in its current form in 2008) and no NL ownership survey consulted. Weekday/weekend shape reused from the kitchen category's meal-time pattern. Needs verification.",
     "weekday": [
       0.01, 0.01, 0.01, 0.01, 0.01, 0.05, 0.2, 0.4, 0.2, 0.1, 0.1, 0.1,
       0.7, 0.7, 0.2, 0.1, 0.1, 0.7, 0.8, 0.7, 0.2, 0.1, 0.05, 0.01
@@ -2032,7 +2032,7 @@
       "intercept": 0.04,
       "occupant_scaling": 1.0
     },
-    "_source": "estimated, unsourced -- not CREST (kettle is CREST's closest hot-drink item) and no NL ownership survey consulted. Weekday/weekend shape reused from the kitchen category's meal-time pattern. Needs verification; see .claude/residential/open.md.",
+    "_source": "estimated, unsourced -- not CREST (kettle is CREST's closest hot-drink item) and no NL ownership survey consulted. Weekday/weekend shape reused from the kitchen category's meal-time pattern. Needs verification.",
     "weekday": [
       0.01, 0.01, 0.01, 0.01, 0.01, 0.05, 0.2, 0.4, 0.2, 0.1, 0.1, 0.1,
       0.7, 0.7, 0.2, 0.1, 0.1, 0.7, 0.8, 0.7, 0.2, 0.1, 0.05, 0.01
@@ -2056,7 +2056,7 @@
       "duration_hours": 4,
       "occupant_scaling": 0.0
     },
-    "_source": "ownership_probability sourced from CBS (2025), 'Meer dan 1 miljoen stekkerauto's in Nederland' (https://www.cbs.nl/nl-nl/nieuws/2025/22/meer-dan-1-miljoen-stekkerauto-s-in-nederland): 6% of NL private passenger cars are plug-in as of early 2025. rated_power_kw (7.4 kW single-phase 32A home wallbox) and strategy_params (evening/overnight plug-in window, ~4h session, not charged every day) are estimated, unsourced -- not CREST (no EVs in its 2008 UK dataset). Needed a genuinely new trigger strategy (core.equipment.overnight_charging_session) since a multi-hour near-constant session gated on occupancy is not what probabilistic_event/sessions_per_week model. Needs verification; see .claude/residential/open.md.",
+    "_source": "ownership_probability sourced from CBS (2025), 'Meer dan 1 miljoen stekkerauto's in Nederland' (https://www.cbs.nl/nl-nl/nieuws/2025/22/meer-dan-1-miljoen-stekkerauto-s-in-nederland): 6% of NL private passenger cars are plug-in as of early 2025. rated_power_kw (7.4 kW single-phase 32A home wallbox) and strategy_params (evening/overnight plug-in window, ~4h session, not charged every day) are estimated, unsourced -- not CREST (no EVs in its 2008 UK dataset). Needed a genuinely new trigger strategy (core.equipment.overnight_charging_session) since a multi-hour near-constant session gated on occupancy is not what probabilistic_event/sessions_per_week model. Needs verification.",
     "weekday": [
       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
       1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0

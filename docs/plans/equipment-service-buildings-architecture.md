@@ -13,10 +13,4 @@ and the household archetypes — is implemented in the codebase. See:
 - `README.md` — overview, repository layout, buem integration.
 - `CONTRIBUTING.md` — scope (what occupancy owns vs. buem), extension
   points, dev commands.
-- `.claude/open.md` — active follow-ups (real regional survey data,
-  service-building capacity config, more archetypes/building types).
-- `.claude/resolved.md` — what was fixed/settled during the restructuring,
-  including why simpy/mesa were not adopted and why no upstream repo's
-  data files were copied (GPL/unlicensed provenance).
-- `CHANGELOG.md` `[Unreleased]` — the full list of breaking changes and
-  additions.
+- `CHANGELOG.md` — breaking changes and additions, release by release.

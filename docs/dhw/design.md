@@ -4,9 +4,8 @@ What `households/dhw.py` implements, why, and every deterministic value it
 depends on — collected in tables so each one can be checked, argued with,
 and replaced independently. The literature review and research trail
 behind this design (papers reviewed, questions asked and answered along
-the way) live in `.claude/residential/dhw_cooking_literature_review.md`,
-not here — this document is the technical reference for what was
-actually built.
+the way) are kept in the maintainers' internal notes, not here — this
+document is the technical reference for what was actually built.
 
 ## What was built
 

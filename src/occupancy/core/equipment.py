@@ -102,9 +102,8 @@ def _occupant_multiplier(
     Without this, an item's firing probability depends only on *whether*
     someone is active and on ``percent_active`` — both invariant in
     household size, so a five-person household ran its washing machine
-    exactly as often as a one-person household (see
-    ``.claude/residential/open.md`` and
-    ``.claude/buem_household_scaling_findings.md``).
+    exactly as often as a one-person household (see the
+    ``_occupant_scaling_comment`` in ``households/data/equipment.json``).
 
     α is per item because appliances differ in how much they are shared:
     α ``0.0`` (the default, and the pre-existing behavior bit for bit)

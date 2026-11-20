@@ -1,5 +1,5 @@
 {
-  "_comment": "Illustrative power ratings, not calibrated. No refrigerated-warehouse variant yet (see .claude/services/open.md).",
+  "_comment": "Illustrative power ratings, not calibrated. No refrigerated-warehouse variant yet.",
   "material_handling": {
     "category": "process",
     "rated_power_kw": 5.0,

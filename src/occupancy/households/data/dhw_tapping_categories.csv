@@ -10,8 +10,7 @@
 # Quantifying the energy and carbon effects of water saving: Final Report
 # for the Environment Agency and Energy Saving Trust") -- not the paper's
 # own text, which does not publish these numbers. See
-# .claude/residential/dhw_cooking_literature_review.md for exactly where
-# this workbook came from, and docs/dhw/design.md for the full
+# docs/dhw/design.md for where this workbook came from and the full
 # extraction, including the plausible-but-hybrid derivation of
 # events_per_day_reference below.
 #

@@ -42,8 +42,7 @@ from occupancy.core.result import OccupancyResult
 # of its own (see `heat_gain_present_kw`/`heat_gain_active_kw` on
 # `ArchetypeSpec`/`ServiceBuildingTypeSpec`, threaded onto `OccupancyResult`
 # by each `to_result()`). Illustrative first-pass values, not
-# survey-calibrated -- see CHANGELOG and `.claude/services/open.md` /
-# `.claude/residential/open.md`.
+# survey-calibrated -- see CHANGELOG.
 HEAT_GAIN_PRESENT_KW = 0.100
 HEAT_GAIN_ACTIVE_KW = 0.150
 
@@ -126,9 +125,7 @@ def to_buem_profiles(
     ``total_power_kwh`` column -- for when elecLoad comes from somewhere
     other than occupancy's own equipment simulation (buem-supplied,
     real metering, ...) but ``Q_ig``/``occ_nothome``/``occ_sleeping`` should
-    still be derived from occupancy's own generated presence pattern. See
-    ``.claude/open.md`` "cross-repo" for the broader pylovo/multi-profile
-    context this is scaffolding for.
+    still be derived from occupancy's own generated presence pattern.
     """
     profile = result.profile
     if elec_load is None and "total_power_kwh" not in profile.columns:

@@ -23,8 +23,8 @@ Thomson -- Loughborough University CREST integrated thermal-electrical
 model), gitignored and not committed to this repo (CC BY-NC-ND, same
 posture as ``CREST_Domestic_electricity_demand_model_1.0e.xlsm`` -- no
 redistribution of the raw workbook). Obtain it directly via the paper's
-own public download link if missing locally; see ``.claude/residential/
-dhw_cooking_literature_review.md`` for the full provenance trail.
+own public download link if missing locally; see ``docs/dhw/design.md``
+for the sources and extraction details.
 
 **What this reads**:
 
@@ -133,8 +133,7 @@ _CSV_HEADER_COMMENT = """\
 # Quantifying the energy and carbon effects of water saving: Final Report
 # for the Environment Agency and Energy Saving Trust") -- not the paper's
 # own text, which does not publish these numbers. See
-# .claude/residential/dhw_cooking_literature_review.md for exactly where
-# this workbook came from, and docs/dhw/design.md for the full
+# docs/dhw/design.md for where this workbook came from and the full
 # extraction, including the plausible-but-hybrid derivation of
 # events_per_day_reference below.
 #
@@ -211,8 +210,7 @@ def main() -> None:
             f"CREST workbook not found at {_XLSM_PATH}. Obtain it "
             "directly via McKenna & Thomson's (2016) own public download "
             "link (Loughborough University CREST); see "
-            ".claude/residential/dhw_cooking_literature_review.md for "
-            "provenance notes."
+            "docs/dhw/design.md for provenance notes."
         )
 
     print(f"Reading {_XLSM_PATH} ...")

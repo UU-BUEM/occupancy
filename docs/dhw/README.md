@@ -9,9 +9,9 @@ answers buem's `dhw_cooking_heat_handoff.md` ask.
 
 The literature review and research trail behind this feature (papers
 reviewed, access status, the design questions asked and answered along
-the way) live in `.claude/residential/dhw_cooking_literature_review.md`,
-not here — that's a record of the research process, not user-facing
-reference documentation of the shipped feature.
+the way) are kept in the maintainers' internal notes, not here — that's
+a record of the research process, not user-facing reference
+documentation of the shipped feature.
 
 See also `../buem_engine_reference.md` — how buem's 5R1C thermal engine
 actually consumes occupancy's output today, and precisely where (and

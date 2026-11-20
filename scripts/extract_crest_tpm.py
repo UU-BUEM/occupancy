@@ -15,9 +15,9 @@ openpyxl`` into the dev env before running this script).
 (Richardson, Thomson, Infield -- Loughborough University CREST), gitignored
 and not committed to this repo (CC BY-NC-ND -- no redistribution of the
 raw workbook). Obtain it directly via the paper's own public download link
-if it's missing locally; see ``.claude/residential/resolved.md`` for the
-provenance/licensing notes already established for this repo's other
-CREST-sourced data (``households/data/equipment.json``).
+if it's missing locally; see the ``_comment`` in
+``households/data/equipment.json`` for the provenance/licensing notes
+already established for this repo's other CREST-sourced data.
 
 **What this reads**: 10 sheets, ``tpm{1..5}_{wd,we}`` -- the "1-5" indexes
 household size (1-5 residents, confirmed via the workbook's own "main"
@@ -188,8 +188,9 @@ def main() -> None:
             f"CREST workbook not found at {_XLSM_PATH}. Obtain it "
             "directly via the CREST Domestic Electricity Demand Model "
             "1.0e's own public download link (Richardson, Thomson, "
-            "Infield -- Loughborough University CREST); see "
-            ".claude/residential/resolved.md for provenance notes."
+            "Infield -- Loughborough University CREST); see the "
+            "_comment in households/data/equipment.json for provenance "
+            "notes."
         )
 
     print(f"Reading {_XLSM_PATH} ...")

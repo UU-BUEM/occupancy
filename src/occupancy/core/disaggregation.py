@@ -3,9 +3,8 @@ electricity profile.
 
 Answers buem's long-deferred "back-calculate equipment usage from an
 externally-supplied elecLoad" ask (see
-``d:/test/buem/.claude/occupancy_module_activities.md`` item 3 and this
-repo's own ``.claude/open.md`` "pylovo/multi-profile" note, direction 2's
-substitution-vs-inference distinction). :func:`occupancy.core.buem_adapter.
+``d:/test/buem/.claude/occupancy_module_activities.md`` item 3).
+:func:`occupancy.core.buem_adapter.
 to_buem_profiles`'s existing ``elec_load=`` parameter is, and remains, pure
 wholesale substitution — this module is a separate, optional preprocessing
 step a caller can run *before* constructing a fresh
