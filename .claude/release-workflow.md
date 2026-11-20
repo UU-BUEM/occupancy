@@ -9,6 +9,25 @@ This is linked to the `UU-BUEM` organization and pushed to the repo
 
 ## Steps
 
+0. **Sync with GitHub first — before choosing a version or writing the
+   CHANGELOG.** `git fetch origin --tags`, then
+   `git log --oneline HEAD..origin/main`. If that lists anything, merge it
+   (`git merge origin/main`) before going further, and check two things
+   in what came in: (a) whether its `CHANGELOG.md` already reserves the
+   next version number (PRs sometimes add a `## [X.Y.Z]` heading without
+   tagging it), and (b) whether that version's tag already exists
+   (`git ls-remote --tags origin`). Pick a number that is free on the
+   remote, not just locally.
+
+   **Why (2026-11-20, v6.1.1 incident):** local `main` was missing PR #16
+   (`CITATION.cff`, which had already written a `[6.1.1]` changelog
+   entry). The `main` push was rejected as non-fast-forward, but the tag
+   push succeeded anyway, so `release.yml` published a GitHub Release —
+   and Zenodo minted a DOI — for `v6.1.1` pointing at a commit not on
+   `main` and missing `CITATION.cff`. A published Zenodo record cannot be
+   deleted by the user, so the fix had to be a follow-up `v6.1.2`, with
+   the stray `v6.1.1` left in place permanently.
+
 1. **Survey the diff since the last release.**
    - `git status`, `git diff`, `git log <last-tag>..HEAD --oneline` (last
      tag: `git describe --tags --abbrev=0`).
@@ -17,10 +36,13 @@ This is linked to the `UU-BUEM` organization and pushed to the repo
      Changelog](https://keepachangelog.com/en/1.1.0/) +
      [SemVer](https://semver.org/); see existing entries for the
      Added/Changed/Fixed/Deprecated style.
-   - Decide whether `CLAUDE.md` or `.claude/*.md` need updating for
-     anything durable the diff introduced (new gotcha, new convention, a
-     resolved open-item) — same judgment as any other session, not a
-     mechanical step.
+   - Decide whether `README.md`/`CONTRIBUTING.md`, `.claude/*.md`, or the
+     local `CLAUDE.md` need updating for anything durable the diff
+     introduced (new gotcha, new convention, a resolved open-item) — same
+     judgment as any other session, not a mechanical step. `CLAUDE.md` is
+     gitignored (local only, since 2026-11-20): public extension points
+     and scope live in `CONTRIBUTING.md`, so update that for anything
+     contributors need.
 
 2. **Determine the version bump.** This repo uses `setuptools_scm`
    (`pyproject.toml`: `version_file = "src/occupancy/_version.py"`) — the
@@ -32,8 +54,8 @@ This is linked to the `UU-BUEM` organization and pushed to the repo
 
 3. **Move `[Unreleased]` → the new version heading** in `CHANGELOG.md`
    (`## [X.Y.Z] - YYYY-MM-DD`, today's date), leaving a fresh empty
-   `[Unreleased]` above it. Commit doc changes (CHANGELOG + any CLAUDE.md/
-   `.claude/` updates from step 1) as their own commit before tagging.
+   `[Unreleased]` above it. Commit doc changes (CHANGELOG + any README/
+   CONTRIBUTING/`.claude/` updates from step 1) as their own commit before tagging.
 
 4. **Run the local CI mirror** (exact steps from
    `.github/workflows/ci.yml`, in the `occupancy_env` conda env — this
@@ -60,13 +82,24 @@ This is linked to the `UU-BUEM` organization and pushed to the repo
    before continuing unless the user has said to run this workflow fully
    autonomously.
 
-6. **Tag and push.**
+6. **Push `main`, confirm it landed, *then* tag and push the tag** —
+   strictly in that order, as separate commands:
 
    ```text
+   git fetch origin
+   git merge-base --is-ancestor origin/main HEAD   # must succeed (fast-forward)
+   git push origin main                            # check: "<old>..<new>  main -> main"
    git tag vX.Y.Z -m "vX.Y.Z"
-   git push origin main
    git push origin vX.Y.Z
    ```
+
+   **Never push the tag if the `main` push was rejected or its outcome is
+   unclear**, and never chain them (`--follow-tags`, `&&` across both
+   pushes, or two pushes in one command whose output gets truncated). A
+   tag push is the irreversible step: it triggers `release.yml`, which
+   publishes a GitHub Release, which fires the Zenodo webhook and mints a
+   permanent DOI for whatever commit the tag points at. A rejected `main`
+   push costs nothing to retry; a wrong tag does not.
 
    **Known gotcha (first hit 2026-08-10, `v3.1.0` push): plain `git push`
    can hang indefinitely with no error output**, even after `gh auth
@@ -106,7 +139,19 @@ This is linked to the `UU-BUEM` organization and pushed to the repo
    If this reproduces again, worth going straight to the token-header
    approach instead of re-attempting/re-diagnosing plain `git push` first.
 
+   The same header also works from the Bash tool (confirmed 2026-11-20):
+
+   ```bash
+   B64=$(printf 'x-access-token:%s' "$(gh auth token)" | base64 -w0)
+   git -c http.extraHeader="Authorization: Basic $B64" push origin main
+   ```
+
 7. **Monitor CI on GitHub** (`gh run list --branch main --limit 1`, then
    `gh run watch <run-id>`, or `gh run watch` on the latest run) until it
    completes. Report the result (pass/fail, and which step if it failed) —
-   don't just fire-and-forget the push.
+   don't just fire-and-forget the push. Watch **both** runs: `CI` on
+   `main`, and `Release` on the tag
+   (`gh run list --workflow release.yml --branch vX.Y.Z`), then confirm
+   the release exists with its wheel + sdist (`gh release view vX.Y.Z`).
+   Zenodo archives the release automatically via the repo webhook; there
+   is nothing to run for it, but remember it cannot be undone.
