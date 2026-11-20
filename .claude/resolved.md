@@ -4,6 +4,23 @@ Household-specific items: `residential/resolved.md`. Service-building-
 specific items: `services/resolved.md`. Do not re-raise. "BY-DESIGN" are
 deliberate choices.
 
+## multi-building peaks and seeds (v6.1.0, 2026-10-12) — fixed/settled
+
+- **#14: multi-dwelling peak overstated** — one `HouseholdProfile`
+  scaled by N dwellings made every dwelling peak at the same hour
+  (peak/mean ~17 at any N). `households/building.py::MultiDwellingProfile`
+  sums `n = min(round(dwellings), cap)` distinct, independently seeded
+  households and scales by `dwellings / n` (peak/mean ~5.8 at n=20).
+- **BY-DESIGN: `cap` defaults to 20** (`DEFAULT_DWELLING_CAP`) — the
+  aggregate's shape stops changing materially by then; more draws only
+  add cost (~25 ms per household).
+- **#15: identical-input buildings shared a seed** — the default seed
+  hashes only construction inputs (type/archetype, size, year, region), so
+  two such buildings got byte-identical profiles.
+  `core/seed.py::building_seed(identifier, year=...)` derives a stable
+  seed from a caller-supplied building ID; pass it as `seed=`. The default
+  seed is unchanged, so existing outputs are unaffected.
+
 ## households + services_buildings restructuring — fixed/settled
 - Dual config source-of-truth (root `configs/*.json` vs bundled
   `src/occupancy/config/data/*.json`) → root `configs/` deleted,

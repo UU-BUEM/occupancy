@@ -21,7 +21,11 @@ Core models:
 
 - Household occupancy: `HouseholdProfile` (aliased as `OccupancyProfile`)
 - Household electricity: `ElectricityConsumptionProfile`
+- Multi-dwelling building (N distinct households summed):
+  `MultiDwellingProfile`
 - Service building occupancy + electricity: `ServiceBuildingProfile`
+- Per-building seeds from an external building ID: `building_seed`
+- Domestic hot water draws, in liters (households): `generate_dhw_draws`
 
 Everything — occupancy probabilities, household archetypes, appliance/
 equipment specs, service-building schedules — is config-driven JSON, not
@@ -47,15 +51,23 @@ occupancy/
 │       │   ├── equipment.py          # EquipmentSpec + trigger-strategy registry
 │       │   ├── occupancy_engine.py   # generator-strategy registry
 │       │   ├── loader.py
-│       │   └── result.py             # OccupancyResult
+│       │   ├── result.py             # OccupancyResult
+│       │   ├── seed.py               # default seeds + building_seed
+│       │   ├── disaggregation.py     # estimate_equipment_usage
+│       │   └── buem_adapter.py       # to_buem_profiles
 │       ├── households/
 │       │   ├── __init__.py           # HOUSEHOLD_ARCHETYPES registry
 │       │   ├── archetypes.py
 │       │   ├── household_profile.py
 │       │   ├── electricity.py
+│       │   ├── building.py           # MultiDwellingProfile
+│       │   ├── dhw.py                # generate_dhw_draws
+│       │   ├── crest_tpm.py          # CREST transition matrices
 │       │   └── data/
 │       │       ├── archetypes/*.json
-│       │       └── equipment.json
+│       │       ├── equipment.json
+│       │       ├── tpm_crest.json
+│       │       └── dhw_tapping_categories.csv
 │       ├── services_buildings/
 │       │   ├── __init__.py           # SERVICE_BUILDING_TYPES registry
 │       │   ├── building_profile.py
@@ -181,8 +193,10 @@ cfg = {**cfg, **buem_inputs}  # merge into buem's cfg dict
 ```
 
 `buem_inputs` is `{"Q_ig": pd.Series, "elecLoad": pd.Series, "occ_nothome":
-pd.Series, "occ_sleeping": pd.Series}`, indexed the same as `result.profile`.
-Notes:
+pd.Series, "occ_sleeping": pd.Series}`, indexed the same as `result.profile`,
+plus a fifth boolean `"cooking_active"` series whenever the profile's
+equipment includes a kitchen item (most households and food-service
+buildings). Notes:
 
 - `Q_ig` is derived from `n_present`/`n_active`, split into present-but-
   inactive vs. active occupants, each with its own per-occupant heat-gain
@@ -208,6 +222,42 @@ Notes:
   to_buem_profiles` and calls them in exactly the pattern shown above —
   the earlier `buem_occupancy` package-name mismatch this section used to
   document has been fixed on buem's side.
+
+### Multi-dwelling buildings and portfolios
+
+Don't model an apartment block as one `HouseholdProfile` multiplied by the
+number of dwellings: every dwelling would peak at the same hour, and the
+building's peak would be overstated. `MultiDwellingProfile` generates
+`n = min(round(dwellings), cap)` distinct households (`cap` defaults to
+20), each with its own seed, sums them, and scales the sum by
+`dwellings / n`. Household sizes are split between the two whole numbers
+around `mean_num_persons`, so the building's average household size is
+kept exactly.
+
+When modeling many buildings, derive each one's seed from a real building
+ID with `building_seed`. Otherwise, two buildings with the same type,
+size, year and region get the same default seed and identical profiles.
+
+```python
+from occupancy import MultiDwellingProfile, building_seed, to_buem_profiles
+
+block = MultiDwellingProfile(
+    dwellings=48,
+    mean_num_persons=2.2,
+    year=2025,
+    archetype="generic",
+    seed=building_seed("BAG-0363100012345678", year=2025),
+    include_dhw=False,  # True adds a summed `dhw_liters_total` column
+)
+buem_inputs = to_buem_profiles(block.to_result())
+```
+
+`dwellings` may be fractional (e.g. a GIS estimate). `block.to_result()`
+sets `num_persons` to the building's total occupants (`dwellings *
+mean_num_persons`, rounded), so `occ_nothome`/`occ_sleeping` stay
+fractions of the whole building. `building_seed` also works as the `seed=`
+argument to `HouseholdProfile` and `ServiceBuildingProfile`. Neither
+feature is available from the CLI yet.
 
 ## Docker
 

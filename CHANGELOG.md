@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.1.1] - 2026-11-20
+
+### Documentation
+
+- README: documented `MultiDwellingProfile` and `building_seed` (new
+  "Multi-dwelling buildings and portfolios" section with a worked
+  example), listed `generate_dhw_draws` among the core models, completed
+  the repository layout, and noted that `to_buem_profiles()` also returns
+  a `cooking_active` series when the equipment includes a kitchen item.
+- CLAUDE.md: corrected the household equipment count (29 → 37), added
+  the `markov_chain_crest` generator (now used by `working_couple`) and
+  the registered equipment strategies, and completed the public-API list
+  and layout.
+
 ## [6.1.0] - 2026-10-12
 
 ### Added

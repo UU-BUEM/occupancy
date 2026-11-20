@@ -94,7 +94,16 @@ items: `services/open.md`.
      external while Q_ig/occ_nothome/occ_sleeping still come from
      occupancy's own occupancy-profile generation", which is what the
      handoff conversation actually needed. Direction 1 (pylovo
-     aggregation/correlation) is still not started/not scoped.
+     aggregation/correlation) is **partly addressed (v6.1.0,
+     2026-10-12)** for its two narrowest cases, see `resolved.md`:
+     within one building, `MultiDwellingProfile` sums distinct
+     households instead of scaling one (#14), and across buildings,
+     `building_seed(identifier, year=...)` stops identical-input
+     buildings from sharing a seed (#15). Both treat dwellings/buildings
+     as **independent** draws. Feeder/transformer-level aggregation and
+     any deliberate *correlation* between profiles (shared weather,
+     holidays, neighbourhood demographics) are still not started/not
+     scoped.
   Whether these run independently or combined, and where the
   aggregation/correlation logic would live (occupancy vs. pylovo vs. a
   new cross-repo layer), is explicitly not decided yet — do not start
@@ -115,8 +124,10 @@ items: `services/open.md`.
 - [all] Keep ruff/mypy/pytest clean; honour `pyproject.toml` settings at
   root.
 - [all] Public API (`OccupancyProfile`/`HouseholdProfile`/
-  `ElectricityConsumptionProfile`/`OccupancyResult`/`ServiceBuildingProfile`/
-  `SERVICE_BUILDING_TYPES`/`HOUSEHOLD_ARCHETYPES`/`EQUIPMENT_TYPES`, all
+  `MultiDwellingProfile`/`ElectricityConsumptionProfile`/`OccupancyResult`/
+  `ServiceBuildingProfile`/`SERVICE_BUILDING_TYPES`/`HOUSEHOLD_ARCHETYPES`/
+  `EQUIPMENT_TYPES`/`to_buem_profiles`/`building_seed`/
+  `generate_dhw_draws`/`estimate_equipment_usage`, all
   re-exported from `occupancy/__init__.py`) is the compatibility surface
   going forward — deep module paths are not guaranteed stable.
   `SERVICE_BUILDING_TYPES` was promoted to this top-level surface
