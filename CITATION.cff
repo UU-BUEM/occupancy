@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "Occupancy: stochastic occupancy and residential electricity profiles"
+abstract: "Stochastic occupancy and residential electricity profile modeling for UU-BUEM."
+authors:
+  - family-names: Sahoo
+    given-names: Somadutta
+    email: s.sahoo@uu.nl
+    affiliation: Utrecht University
+repository-code: "https://github.com/UU-BUEM/occupancy"
+license: MIT
+keywords:
+  - occupancy
+  - building-energy
+  - stochastic-modeling
+  - UU-BUEM

@@ -4,7 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.1.2] - 2026-11-20
+
+### Added
+
+- `CITATION.cff`: citation metadata for GitHub's "Cite this
+  repository" button and for Zenodo, which archives every release
+  and issues it a DOI. (Originally planned as 6.1.1, see below.)
+
+### Documentation
+
+- Brings the 6.1.1 documentation updates onto `main`. Use 6.1.2 rather
+  than 6.1.1: it contains both those docs and `CITATION.cff`.
+
 ## [6.1.1] - 2026-11-20
+
+Tagged from a commit that was not on `main` and that lacks
+`CITATION.cff`; superseded by 6.1.2.
 
 ### Documentation
 
