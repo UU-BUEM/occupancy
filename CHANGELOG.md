@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.0.0] - 2026-11-26
+
 ### Added
 
 - Household electric-vehicle sub-model (`occupancy.core.ev`), wired into
