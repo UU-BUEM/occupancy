@@ -56,6 +56,12 @@ equipment is modeled here, not downstream:
   differences, and conversion to thermal energy (e.g. turning hot-water
   liters into kWh).
 
+For electric vehicles, occupancy owns the driving and charging
+*behaviour* (trips, when the car is home and plugged in, the uncontrolled
+charging profile). The EV battery and chargers as optimisable technologies
+(cost, lifetime, degradation) belong in conversion-technologies; see
+`docs/ev/design.md`.
+
 If a downstream model needs an occupant- or equipment-driven input that
 occupancy doesn't produce yet, extend occupancy rather than
 reimplementing that behavior downstream. For example, floor-area-based
@@ -84,6 +90,12 @@ when the behavior itself is new. All paths below are relative to
   with `core.equipment.register_strategy`. Registered today:
   `probabilistic_event`, `flat_always_on`, `sessions_per_week`,
   `linear_in_occupants`, `overnight_charging_session`.
+- **Electric vehicles** are not appliance rows: an EV is a stateful
+  battery whose charging is not an internal heat gain, so it has its own
+  model (`core/ev.py`) and parameters (`households/data/ev.json`). Change
+  EV behaviour there, or per call through `ev_config=` overrides (e.g.
+  survey distributions). Keep every EV quantity out of `total_power_kwh`.
+  See `docs/ev/design.md`.
 - **New household archetype**: add
   `households/data/archetypes/<name>.json` (occupancy probabilities,
   generator, equipment overrides). Every JSON file in that folder is

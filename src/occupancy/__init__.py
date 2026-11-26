@@ -1,7 +1,11 @@
 """Occupancy modeling package for UU-BUEM: households and service buildings."""
 
 from occupancy.core.buem_adapter import to_buem_profiles
-from occupancy.core.disaggregation import estimate_equipment_usage
+from occupancy.core.disaggregation import (
+    estimate_equipment_usage,
+    subtract_ev_load,
+)
+from occupancy.core.ev import EV_COLUMNS, EVConfig
 from occupancy.core.result import OccupancyResult
 from occupancy.core.seed import building_seed
 from occupancy.households import (
@@ -11,6 +15,7 @@ from occupancy.households import (
     HouseholdProfile,
     MultiDwellingProfile,
     generate_dhw_draws,
+    load_ev_config,
 )
 from occupancy.services_buildings import (
     SERVICE_BUILDING_TYPES,
@@ -28,8 +33,10 @@ except ImportError:
 
 __all__ = [
     "EQUIPMENT_TYPES",
+    "EV_COLUMNS",
     "HOUSEHOLD_ARCHETYPES",
     "SERVICE_BUILDING_TYPES",
+    "EVConfig",
     "ElectricityConsumptionProfile",
     "HouseholdProfile",
     "MultiDwellingProfile",
@@ -40,5 +47,7 @@ __all__ = [
     "building_seed",
     "estimate_equipment_usage",
     "generate_dhw_draws",
+    "load_ev_config",
+    "subtract_ev_load",
     "to_buem_profiles",
 ]

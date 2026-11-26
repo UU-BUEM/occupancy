@@ -275,8 +275,10 @@ def test_equipment_types_top_level_export() -> None:
     into the deep households.electricity module path."""
     assert occupancy.EQUIPMENT_TYPES is EQUIPMENT_TYPES
     assert set(EQUIPMENT_TYPES) == set(default_equipment_table())
-    assert len(EQUIPMENT_TYPES) == 37
+    assert len(EQUIPMENT_TYPES) == 36
     assert EQUIPMENT_TYPES["hob"].category == "kitchen"
+    # EVs are modeled by occupancy.core.ev, never as an appliance row.
+    assert "ev_charger" not in EQUIPMENT_TYPES
 
 
 def test_default_seed_is_deterministic_across_constructions() -> None:

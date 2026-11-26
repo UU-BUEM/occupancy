@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Any
 
 from occupancy.config import ScenarioConfig, load_scenario_config
+from occupancy.core.ev import EVConfig
 from occupancy.households import (
     ElectricityConsumptionProfile,
     HouseholdProfile,
+    load_ev_config,
 )
 from occupancy.services_buildings import ServiceBuildingProfile
 from occupancy.services_buildings.building_types import SERVICE_BUILDING_TYPES
@@ -65,12 +68,65 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also generate total electricity demand profile.",
     )
     parser.add_argument(
+        "--ev",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Household has an electric vehicle (default: yes). EV columns "
+        "are added with --include-electricity; EV charging is never part "
+        "of total_power_kwh.",
+    )
+    parser.add_argument(
+        "--ev-ownership-probability",
+        type=float,
+        default=None,
+        help="EV ownership is unknown: draw it with this probability "
+        "(community analysis; bundled default 0.20 for Loenen). Overrides "
+        "--ev.",
+    )
+    parser.add_argument(
+        "--ev-charger-kw",
+        type=float,
+        default=None,
+        help="Home charger power in kW (default 7.4).",
+    )
+    parser.add_argument(
+        "--ev-config",
+        type=Path,
+        default=None,
+        help="JSON file of EV parameter overrides (e.g. survey-derived "
+        "distributions), merged over households/data/ev.json.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
         help="Output CSV path.",
     )
     return parser
+
+
+def _ev_arguments(
+    args: argparse.Namespace, config: ScenarioConfig
+) -> tuple[bool | None, EVConfig | dict[str, Any] | str | Path | None]:
+    """Resolve (has_ev, ev_config) from CLI flags over the scenario file."""
+    has_ev = args.ev if args.ev is not None else config.has_ev
+    file_overrides = (
+        args.ev_config if args.ev_config is not None else config.ev_overrides
+    )
+    flag_overrides: dict[str, Any] = {}
+    if args.ev_ownership_probability is not None:
+        has_ev = None
+        flag_overrides["ownership_probability"] = args.ev_ownership_probability
+    if args.ev_charger_kw is not None:
+        base = load_ev_config(file_overrides)
+        flag_overrides["charging_modes"] = {
+            base.home_mode.name: {"power_kw": args.ev_charger_kw}
+        }
+    if not flag_overrides:
+        return has_ev, file_overrides
+    return has_ev, load_ev_config(file_overrides).with_overrides(
+        flag_overrides
+    )
 
 
 def main() -> int:
@@ -112,6 +168,7 @@ def main() -> int:
         profile = household.get_profile()
 
         if include_electricity:
+            has_ev, ev_config = _ev_arguments(args, config)
             electricity = ElectricityConsumptionProfile(
                 occupancy_profile=household,
                 seed=seed,
@@ -124,6 +181,8 @@ def main() -> int:
                 has_fridge=config.has_fridge,
                 has_other=config.has_other,
                 has_lighting=config.has_lighting,
+                has_ev=has_ev,
+                ev_config=ev_config,
             )
             profile = electricity.get_profile()
     else:

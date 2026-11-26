@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -10,9 +13,18 @@ from occupancy.core.equipment import (
     generate_equipment_power,
     normalize_equipment_table,
 )
+from occupancy.core.ev import (
+    EV_COLUMNS,
+    EVConfig,
+    measured_ev_frame,
+    no_ev_frame,
+    simulate_ev,
+    summarize_ev,
+)
 from occupancy.core.loader import load_json_resource
 from occupancy.core.result import OccupancyResult
 from occupancy.households.archetypes import get_archetype
+from occupancy.households.ev import load_ev_config
 from occupancy.households.household_profile import HouseholdProfile
 
 _PACKAGE = "occupancy.households"
@@ -82,13 +94,18 @@ _LEGACY_FLAG_TO_EQUIPMENT: dict[str, list[str]] = {
         "laptop",
         "smart_speaker",
         "wifi_router",
-        "ev_charger",
     ],
 }
 
 # Draws ownership using a seed offset from the main RNG's seed so ownership
 # outcomes don't perturb the equipment-trigger draw sequence (and vice versa).
 _OWNERSHIP_SEED_OFFSET = 1_000_000
+
+# Independent random streams for the EV (ownership draw, trip simulation),
+# keyed off the profile's seed, so adding/removing an EV or changing its
+# ownership probability never perturbs the appliance draws or each other.
+_EV_OWNERSHIP_STREAM = 0xE1
+_EV_SIMULATION_STREAM = 0xE2
 
 # The equipment category whose subtotal backs the `cooking_active` signal
 # (buem's `dhw_cooking_heat_handoff.md` ask #2) -- matches the `category`
@@ -147,6 +164,25 @@ class ElectricityConsumptionProfile:
     gas-cooking-energy term from real per-household cooking timing rather
     than a flat national average. Reuses the existing kitchen-equipment
     stochastic generation; no new modeling capability or data source.
+
+    **Electric vehicle.** An EV is simulated separately
+    (:func:`occupancy.core.ev.simulate_ev`) and added as the
+    :data:`~occupancy.core.ev.EV_COLUMNS` (``ev_charging_kw``,
+    ``ev_plugged_in``, ``ev_soc``, ...). It is deliberately **not** part of
+    ``total_power_kwh``: that column is buem's ``elecLoad``, an internal
+    heat gain, and EV charging heats no living space. The meter-level sum
+    is ``total_power_incl_ev_kwh``.
+
+    - ``has_ev=True`` (default, individual-household analysis): the
+      household has an EV.
+    - ``has_ev=False``: no EV.
+    - ``has_ev=None`` (unknown, e.g. community analysis): drawn once with
+      the config's ``ownership_probability`` (0.20 by default, Loenen).
+    - ``ev_config``: overrides of ``households/data/ev.json`` -- a mapping,
+      a JSON file path or an :class:`~occupancy.core.ev.EVConfig`; e.g.
+      ``{"charging_modes": {"slow": {"power_kw": 11.0}}}``.
+    - ``ev_charging_kw``: a *measured* home-charging series (survey,
+      sub-meter); replaces the simulation and implies ``has_ev=True``.
     """
 
     occupancy_profile: HouseholdProfile
@@ -160,18 +196,71 @@ class ElectricityConsumptionProfile:
     has_other: bool = True
     has_lighting: bool = True
     seed: int | None = None
+    has_ev: bool | None = True
+    ev_config: EVConfig | Mapping[str, Any] | str | Path | None = None
+    ev_charging_kw: pd.Series | None = None
 
     def __post_init__(self) -> None:
         if self.seed is None:
             self.seed = self.occupancy_profile.seed
         self._rng = np.random.default_rng(self.seed)
         self._profile: pd.DataFrame | None = None
+        self._ev_config = load_ev_config(self.ev_config)
+        self._ev_owned = self._resolve_ev_ownership()
 
         if self.equipment is None:
             archetype = get_archetype(self.occupancy_profile.archetype)
             self.equipment = _apply_overrides(
                 default_equipment_table(), archetype.equipment_overrides
             )
+
+    def _ev_rng(self, stream: int) -> np.random.Generator:
+        entropy = (
+            [stream]
+            if self.seed is None
+            else [int(self.seed) & 0xFFFF_FFFF_FFFF_FFFF, stream]
+        )
+        return np.random.default_rng(entropy)
+
+    def _resolve_ev_ownership(self) -> bool:
+        if self.ev_charging_kw is not None:
+            return True
+        if self.has_ev is not None:
+            return bool(self.has_ev)
+        draw = self._ev_rng(_EV_OWNERSHIP_STREAM).random()
+        return bool(draw < self._ev_config.ownership_probability)
+
+    @property
+    def ev_owned(self) -> bool:
+        """Whether this household has an EV (``has_ev`` resolved, including
+        the ownership draw when ``has_ev`` is ``None``)."""
+        return self._ev_owned
+
+    def get_ev_config(self) -> EVConfig:
+        """The EV parameters in effect (defaults plus ``ev_config``)."""
+        return self._ev_config
+
+    def _generate_ev(self, profile: pd.DataFrame) -> pd.DataFrame:
+        index = profile.index
+        assert isinstance(index, pd.DatetimeIndex)
+        if self.ev_charging_kw is not None:
+            return measured_ev_frame(index, self.ev_charging_kw)
+        if not self._ev_owned:
+            return no_ev_frame(index)
+        return simulate_ev(
+            profile,
+            num_persons=self.occupancy_profile.num_persons,
+            config=self._ev_config,
+            rng=self._ev_rng(_EV_SIMULATION_STREAM),
+        )
+
+    def ev_summary(self) -> dict[str, float]:
+        """Annual EV indicators (energy at home/away, sessions, session
+        length, equivalent full cycles) -- see
+        :func:`occupancy.core.ev.summarize_ev`. Empty when no EV."""
+        if not self._ev_owned:
+            return {}
+        return summarize_ev(self.get_profile(), self._ev_config)
 
     def get_equipment_table(self) -> dict[str, EquipmentSpec]:
         assert self.equipment is not None
@@ -228,6 +317,12 @@ class ElectricityConsumptionProfile:
         occ_profile["cooking_active"] = (
             category_totals.get(_COOKING_CATEGORY, np.zeros(len(occ_profile)))
             > 0
+        )
+        ev = self._generate_ev(occ_profile)
+        for column in EV_COLUMNS:
+            occ_profile[column] = ev[column]
+        occ_profile["total_power_incl_ev_kwh"] = (
+            occ_profile["total_power_kwh"] + occ_profile["ev_charging_kw"]
         )
         self._profile = occ_profile
         return occ_profile

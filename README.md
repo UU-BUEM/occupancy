@@ -26,6 +26,9 @@ Core models:
 - Service building occupancy + electricity: `ServiceBuildingProfile`
 - Per-building seeds from an external building ID: `building_seed`
 - Domestic hot water draws, in liters (households): `generate_dhw_draws`
+- Household electric vehicle: trips, state of charge, plug-in behaviour
+  and charging (`ev_*` columns of `ElectricityConsumptionProfile`; see
+  [docs/ev/design.md](docs/ev/design.md))
 
 Everything — occupancy probabilities, household archetypes, appliance/
 equipment specs, service-building schedules — is config-driven JSON, not
@@ -53,7 +56,8 @@ occupancy/
 │       │   ├── loader.py
 │       │   ├── result.py             # OccupancyResult
 │       │   ├── seed.py               # default seeds + building_seed
-│       │   ├── disaggregation.py     # estimate_equipment_usage
+│       │   ├── disaggregation.py     # estimate_equipment_usage, subtract_ev_load
+│       │   ├── ev.py                 # EV mobility/SOC/charging simulation
 │       │   └── buem_adapter.py       # to_buem_profiles
 │       ├── households/
 │       │   ├── __init__.py           # HOUSEHOLD_ARCHETYPES registry
@@ -62,10 +66,12 @@ occupancy/
 │       │   ├── electricity.py
 │       │   ├── building.py           # MultiDwellingProfile
 │       │   ├── dhw.py                # generate_dhw_draws
+│       │   ├── ev.py                 # EV defaults loader (load_ev_config)
 │       │   ├── crest_tpm.py          # CREST transition matrices
 │       │   └── data/
 │       │       ├── archetypes/*.json
 │       │       ├── equipment.json
+│       │       ├── ev.json               # EV parameters (not an appliance row)
 │       │       ├── tpm_crest.json
 │       │       └── dhw_tapping_categories.csv
 │       ├── services_buildings/
@@ -219,6 +225,10 @@ buildings). Notes:
   genuine sleeping occupants through the same mechanism. A fixed
   23:00–07:00 window heuristic is used only as a household-only fallback
   for profiles generated before this column existed.
+- `elecLoad` is appliances and lighting only. A household's EV charging
+  is **not** an internal heat gain and is never in `elecLoad`; when the
+  profile has an EV, `buem_inputs` also carries a separate
+  `"ev_charging_kw"` series for an energy-system model to use.
 - buem (`UU-BUEM/buem`)'s `cfg_attribute.py` now imports
   `from occupancy import ElectricityConsumptionProfile, HouseholdProfile,
   to_buem_profiles` and calls them in exactly the pattern shown above —
@@ -260,6 +270,37 @@ mean_num_persons`, rounded), so `occ_nothome`/`occ_sleeping` stay
 fractions of the whole building. `building_seed` also works as the `seed=`
 argument to `HouseholdProfile` and `ServiceBuildingProfile`. Neither
 feature is available from the CLI yet.
+
+### Electric vehicles
+
+`ElectricityConsumptionProfile` simulates a household EV day by day:
+trips drawn jointly (departure, arrival, distance) and tied to the
+household's own presence, a battery state of charge carried across days,
+a SOC-dependent plug-in decision, and charging limited by charger and car
+power with a taper near full. Its columns (`ev_charging_kw`,
+`ev_plugged_in`, `ev_soc`, `ev_drive_kwh`, ...) sit next to
+`total_power_kwh`, which excludes the EV; `total_power_incl_ev_kwh` is the
+meter-level sum.
+
+```python
+from occupancy import ElectricityConsumptionProfile, HouseholdProfile
+
+hh = HouseholdProfile(num_persons=2, year=2025, archetype="working_couple")
+ElectricityConsumptionProfile(hh)                    # individual: has an EV
+ElectricityConsumptionProfile(hh, has_ev=False)      # no EV
+ElectricityConsumptionProfile(hh, has_ev=None)       # unknown: 20% chance (Loenen default)
+ElectricityConsumptionProfile(                       # 11 kW wallbox
+    hh, ev_config={"charging_modes": {"slow": {"power_kw": 11.0}}}
+)
+```
+
+`MultiDwellingProfile` draws EV ownership per dwelling (`has_ev=None`) by
+default. All parameters live in `households/data/ev.json` and can be
+overridden per call with a dict or a JSON file (e.g. survey data). For a
+metered total that includes the EV, `subtract_ev_load()` recovers the
+appliance load. See [docs/ev/design.md](docs/ev/design.md) for the
+method, sources, survey workflow and the split with conversion-
+technologies/Calliope.
 
 ## Docker
 

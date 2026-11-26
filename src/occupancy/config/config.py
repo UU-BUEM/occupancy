@@ -54,6 +54,11 @@ class ScenarioConfig:
     home_probabilities: np.ndarray | None = None
     active_probabilities: np.ndarray | None = None
     equipment: dict[str, EquipmentSpec] | None = None
+    # EV: True/False = household has / has no EV; None = unknown, drawn
+    # from the EV ownership probability. ev_overrides is a mapping (or a
+    # JSON file path) deep-merged over households/data/ev.json.
+    has_ev: bool | None = True
+    ev_overrides: dict[str, Any] | str | None = None
 
     @classmethod
     def default(cls) -> ScenarioConfig:
@@ -67,6 +72,10 @@ class ScenarioConfig:
         scenario = mapping.get("scenario", mapping)
         occupancy = mapping.get("occupancy", {})
         electricity = mapping.get("electricity", {})
+        ev = mapping.get("ev") or {}
+        has_ev = ev.get("has_ev", True)
+        if has_ev is not None and not isinstance(has_ev, bool):
+            raise ValueError("ev.has_ev must be true, false or null")
 
         equipment_data = electricity.get("equipment")
         equipment = (
@@ -103,6 +112,8 @@ class ScenarioConfig:
                 occupancy.get("active_probabilities"),
             ),
             equipment=equipment,
+            has_ev=has_ev,
+            ev_overrides=ev.get("overrides"),
         )
 
 

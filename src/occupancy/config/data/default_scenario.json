@@ -23,5 +23,9 @@
   },
   "electricity": {
     "equipment": null
+  },
+  "ev": {
+    "has_ev": true,
+    "overrides": null
   }
 }

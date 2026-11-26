@@ -101,6 +101,52 @@ def _build_template_matrix(
     return names, np.column_stack(columns)
 
 
+def subtract_ev_load(
+    total_load: pd.Series,
+    ev_charging_kw: pd.Series,
+    *,
+    tolerance_kw: float = 0.05,
+) -> pd.Series:
+    """Remove home EV charging from a metered household total.
+
+    Survey or smart-meter data typically give the household's *total*
+    electricity, EV included. EV charging is not an internal heat gain, and
+    a 7 kW block swamps every appliance in a fit, so take it out first and
+    pass the remainder on, e.g. as ``to_buem_profiles(elec_load=...)`` or
+    to :func:`estimate_equipment_usage`.
+
+    ``ev_charging_kw`` is the EV's home-charging series: measured (a
+    sub-meter or the survey's charging log) or simulated (the
+    ``ev_charging_kw`` column of an
+    :class:`~occupancy.households.electricity.ElectricityConsumptionProfile`).
+    A simulated series only matches the measured total *statistically*,
+    not hour by hour, so subtracting one from a real meter series leaves
+    timing errors; prefer measured charging data where it exists.
+
+    Hours where the EV series exceeds the total by more than
+    ``tolerance_kw`` raise ``ValueError`` (the two series do not belong
+    together); smaller negatives -- rounding, meter resolution -- are
+    clipped to zero.
+
+    Note: a *net* meter reading of a household with PV is already reduced
+    by self-consumed solar; this function does not undo that.
+    """
+    aligned = ev_charging_kw.reindex(total_load.index)
+    if aligned.isna().any():
+        raise ValueError(
+            "ev_charging_kw does not cover total_load's index after "
+            "reindexing -- pass a series aligned to total_load.index."
+        )
+    remainder = total_load.astype(float) - aligned.astype(float)
+    worst = float(remainder.min()) if len(remainder) else 0.0
+    if worst < -tolerance_kw:
+        raise ValueError(
+            f"EV charging exceeds the total load by up to {-worst:.3f} kW "
+            "-- the series do not describe the same household/period."
+        )
+    return remainder.clip(lower=0.0).rename("elec_load_excl_ev")
+
+
 def estimate_equipment_usage(
     elec_load: pd.Series,
     profile: pd.DataFrame,

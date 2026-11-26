@@ -24,6 +24,7 @@ from occupancy.households.electricity import (
     ElectricityConsumptionProfile,
     default_equipment_table,
 )
+from occupancy.households.ev import default_ev_config, load_ev_config
 from occupancy.households.household_profile import HouseholdProfile
 
 __all__ = [
@@ -35,8 +36,10 @@ __all__ = [
     "HouseholdProfile",
     "MultiDwellingProfile",
     "default_equipment_table",
+    "default_ev_config",
     "generate_dhw_draws",
     "get_archetype",
+    "load_ev_config",
     "load_tapping_categories",
     "register_archetype",
     "register_timing_envelope",

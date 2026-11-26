@@ -60,6 +60,22 @@ DEFAULT_SLEEP_WINDOW: tuple[int, int] = (
     7,
 )  # [start_hour, end_hour), wraps midnight
 
+#: EV series passed through unchanged when the profile has them: home
+#: charging (on the meter, never an internal gain) and the series an
+#: energy-system model needs to treat the EV as a flexible demand -- when
+#: the car is connected, the battery energy used for driving, the
+#: grid-side energy charged away from home, and the energy stored in the
+#: battery at the end of each hour (so an optimiser's battery can start
+#: and end the period at the simulated car's levels). All are energies or
+#: fractions that add up across dwellings and blend linearly.
+EV_PASSTHROUGH_COLUMNS: tuple[str, ...] = (
+    "ev_charging_kw",
+    "ev_plugged_in",
+    "ev_drive_kwh",
+    "ev_away_charging_kwh",
+    "ev_stored_kwh",
+)
+
 
 def to_buem_profiles(
     result: OccupancyResult,
@@ -83,6 +99,15 @@ def to_buem_profiles(
     gas-cooking-energy term driven by real per-building cooking timing
     (buem's ``dhw_cooking_heat_handoff.md`` ask #2). Absent otherwise --
     buem's four required keys are unaffected either way.
+
+    ``elecLoad`` is ``total_power_kwh``: appliances and lighting only. EV
+    charging is never part of it (an EV charges in a driveway/garage and
+    is no internal heat gain). When the profile carries an EV, the
+    :data:`EV_PASSTHROUGH_COLUMNS` are returned as extra series (home
+    charging, plugged-in fraction, driving energy, away-charging energy,
+    stored battery energy) --
+    for passing on to an energy-system model as a separate (flexible)
+    demand, never for adding to ``elecLoad``.
 
     ``result.profile`` must already carry a ``total_power_kwh`` column (i.e.
     equipment power was generated) -- pass a ``ServiceBuildingProfile``
@@ -243,4 +268,7 @@ def to_buem_profiles(
         result_profiles["cooking_active"] = profile["cooking_active"].rename(
             "cooking_active"
         )
+    for column in EV_PASSTHROUGH_COLUMNS:
+        if column in profile.columns:
+            result_profiles[column] = profile[column].rename(column)
     return result_profiles

@@ -32,11 +32,15 @@ already collapses to that at N=1).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
+from occupancy.core.ev import EVConfig
 from occupancy.core.result import OccupancyResult
 from occupancy.core.seed import derive_default_seed
 from occupancy.households.archetypes import get_archetype
@@ -53,6 +57,19 @@ DEFAULT_DWELLING_CAP = 20
 # (and hence correlated draws) for adjacent dwellings.
 _DWELLING_SEED_STRIDE = 104_395_301
 _SEED_MODULUS = 1 << 63
+
+# EV columns that add up across dwellings (energies; plugged-in / at-home
+# fractions become "number of EVs plugged in / at home"; stored kWh
+# becomes the building's total EV battery content). Per-car SOC does not
+# sum, so it is left out of the building-level frame.
+_SUMMED_EV_COLUMNS = (
+    "ev_charging_kw",
+    "ev_plugged_in",
+    "ev_at_home",
+    "ev_stored_kwh",
+    "ev_drive_kwh",
+    "ev_away_charging_kwh",
+)
 
 
 def _dwelling_household_sizes(n: int, mean_num_persons: float) -> list[int]:
@@ -80,6 +97,13 @@ class MultiDwellingProfile:
     the building's average household size -- see
     :func:`_dwelling_household_sizes` for how it's realized across the
     ``n`` distinct households actually drawn.
+
+    EVs: ``has_ev=None`` (the default here, unlike a single
+    :class:`~occupancy.households.electricity.ElectricityConsumptionProfile`)
+    draws each dwelling's EV ownership from ``ev_config``'s
+    ``ownership_probability``. EV energies and counts (``ev_charging_kw``,
+    ``ev_plugged_in`` = EVs plugged in, ``ev_stored_kwh``, ...) are summed
+    and scaled like ``total_power_kwh``; per-car ``ev_soc`` is omitted.
     """
 
     dwellings: float
@@ -90,6 +114,11 @@ class MultiDwellingProfile:
     seed: int | None = None
     cap: int = DEFAULT_DWELLING_CAP
     include_dhw: bool = False
+    # Community default: EV ownership is unknown per dwelling, so each
+    # dwelling draws it from the EV config's ownership_probability (0.20
+    # by default, Loenen). True/False force every dwelling either way.
+    has_ev: bool | None = None
+    ev_config: EVConfig | Mapping[str, Any] | str | Path | None = None
 
     def __post_init__(self) -> None:
         if self.dwellings <= 0:
@@ -113,6 +142,9 @@ class MultiDwellingProfile:
 
         self._households: list[HouseholdProfile] | None = None
         self._profile: pd.DataFrame | None = None
+        #: Number of EVs in the building (scaled like every other summed
+        #: quantity); set by :meth:`generate`.
+        self.n_ev: float | None = None
 
     def get_households(self) -> list[HouseholdProfile]:
         """The ``n_households`` distinct, lazily-built households backing
@@ -141,33 +173,42 @@ class MultiDwellingProfile:
         occupancy fractions, electricity and (if ``include_dhw``) DHW
         draws into one building-level profile."""
         households = self.get_households()
-        elec_profiles = [
-            ElectricityConsumptionProfile(occupancy_profile=hh).get_profile()
+        electricity = [
+            ElectricityConsumptionProfile(
+                occupancy_profile=hh,
+                has_ev=self.has_ev,
+                ev_config=self.ev_config,
+            )
             for hh in households
         ]
+        elec_profiles = [elec.get_profile() for elec in electricity]
+        self.n_ev = sum(elec.ev_owned for elec in electricity) * self.scale
 
         index = elec_profiles[0].index
-        n_present = np.zeros(len(index))
-        n_active = np.zeros(len(index))
-        n_asleep = np.zeros(len(index))
-        total_power_kwh = np.zeros(len(index))
-        cooking_count = np.zeros(len(index))
+        n = len(index)
+        summed = {
+            column: np.zeros(n)
+            for column in (
+                "n_present",
+                "n_active",
+                "n_asleep",
+                "total_power_kwh",
+                *_SUMMED_EV_COLUMNS,
+            )
+        }
+        cooking_count = np.zeros(n)
         for profile in elec_profiles:
-            n_present += profile["n_present"].to_numpy(dtype=float)
-            n_active += profile["n_active"].to_numpy(dtype=float)
-            n_asleep += profile["n_asleep"].to_numpy(dtype=float)
-            total_power_kwh += profile["total_power_kwh"].to_numpy(dtype=float)
+            for column, total in summed.items():
+                total += profile[column].fillna(0.0).to_numpy(dtype=float)
             cooking_count += profile["cooking_active"].to_numpy(dtype=float)
 
         result = pd.DataFrame(
-            {
-                "n_present": n_present * self.scale,
-                "n_active": n_active * self.scale,
-                "n_asleep": n_asleep * self.scale,
-                "total_power_kwh": total_power_kwh * self.scale,
-                "cooking_active": cooking_count > 0,
-            },
+            {column: total * self.scale for column, total in summed.items()},
             index=index,
+        )
+        result.insert(4, "cooking_active", cooking_count > 0)
+        result["total_power_incl_ev_kwh"] = (
+            result["total_power_kwh"] + result["ev_charging_kw"]
         )
 
         if self.include_dhw:

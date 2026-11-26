@@ -1,0 +1,102 @@
+{
+  "_comment": "Household electric-vehicle (EV) defaults for occupancy.core.ev. Deliberately kept OUT of equipment.json: an EV is not an hourly-triggered appliance but a stateful battery whose charging depends on trips, state of charge and plug-in behaviour, and its charging power is NOT an internal heat gain (the charger/car sit in a driveway or garage), so it must never enter total_power_kwh / buem's elecLoad. Every key can be overridden per call (EVConfig.with_overrides / load_ev_config) -- e.g. with survey-derived distributions -- without editing this file. Keys starting with '_' are documentation. See docs/ev/design.md for the method and every source.",
+  "ownership_probability": 0.2,
+  "_ownership_source": "Community-analysis default, user-specified for Loenen (Gelderland, NL) on 2026-11-23: EV ownership there is above the national average. For comparison, CBS (2025) 'Meer dan 1 miljoen stekkerauto's in Nederland' reports ~6% of NL private passenger cars as plug-in (a share of cars, not of households). Only used when has_ev is None (unknown, e.g. community analysis); an individual-household run defaults to has_ev=True.",
+  "has_home_charger": true,
+  "_has_home_charger_note": "false = the household owns an EV but has no private charge point (street parking): every kWh is then charged away from home and the household meter sees no EV load.",
+  "home_charging_mode": "slow",
+  "away_charging_mode": "fast",
+  "home_charging_start_hour": null,
+  "_home_charging_start_hour_note": "null = charging starts as soon as the car is plugged in (uncontrolled charging, the default). A clock hour (e.g. 23 or 21.5) = a charging timer: the car stays connected from plug-in but only starts charging at the next occurrence of that hour, e.g. the start of a Dutch off-peak (dal) tariff. This is the simple 'scheduled' baseline between uncontrolled and optimised (smart) charging. Hours of day assume the profile starts at 00:00 local time.",
+  "charging_modes": {
+    "slow": {
+      "power_kw": 7.4,
+      "current": "ac",
+      "efficiency": 0.92,
+      "taper_start_soc": 0.95,
+      "taper_end_fraction": 0.5,
+      "_source": "power_kw 7.4 = single-phase 32 A home wallbox, user-specified default (any value may be passed; charging durations follow from energy / power). efficiency 0.92 = 95% inverter/transformer x 97% battery input, as used by Brady & O'Mahony (2016, Sustainable Cities and Society 26:203-216, Sec. 4.3, after Keane & Flynn 2012). taper_* (constant-current/constant-voltage slow-down near full) are estimated, unsourced -- AC charging at <= 11 kW tapers only close to 100%."
+    },
+    "fast": {
+      "power_kw": 50.0,
+      "current": "dc",
+      "efficiency": 0.93,
+      "taper_start_soc": 0.8,
+      "taper_end_fraction": 0.2,
+      "_source": "power_kw 50 = common public DC fast-charger rating; efficiency and taper_* are estimated, unsourced (typical CC-CV behaviour: DC fast charging slows sharply above ~80% SOC). Fast charging's higher battery wear is a technology (degradation) property and is modelled in conversion-technologies, not here; occupancy reports the energy charged per mode so it can be computed."
+    }
+  },
+  "vehicle": {
+    "battery_capacity_kwh": 60.0,
+    "consumption_kwh_per_km": 0.18,
+    "max_ac_power_kw": 11.0,
+    "max_dc_power_kw": 130.0,
+    "monthly_consumption_multiplier": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    "_source": "battery_capacity_kwh 60 (usable) is estimated, unsourced: Dutch consumer tests of 2024 models span ~51-95 kWh net (id.nl Verbruiksmonitor). consumption_kwh_per_km 0.18 (battery side, real-world) is estimated from id.nl real-world tests of 2024 models (16.8-19.5 kWh/100 km) and the 15-18 kWh/100 km mixed-driving range plus 20-30% real-world uplift cited by consumer guides; Brady & O'Mahony (2016) measured 0.265 kWh/km for the 2010-era Mitsubishi i-MiEV. max_ac/max_dc_power_kw are the car's on-board limits (estimated): effective charging power = min(charger, car). monthly_consumption_multiplier is a hook for winter consumption uplift (cabin heating, cold battery); left neutral (1.0) because no NL-sourced monthly profile has been found yet."
+  },
+  "battery": {
+    "soc_min": 0.1,
+    "soc_target_home": 0.9,
+    "soc_target_away": 0.8,
+    "soc_initial": 0.8,
+    "_source": "Estimated, unsourced. soc_target_home 0.9 reflects the common practice of capping daily home charging below 100% for battery health (set 1.0 to charge to full). soc_min is the reserve the driver never runs below: a trip that would cross it is assumed to include an away (fast) top-up. soc_initial only seeds the warm-up period (simulation.warmup_days), so it barely affects the result -- the same reason Brady & O'Mahony (2016) simulate two days and keep the second."
+  },
+  "mobility": {
+    "annual_km": 14800,
+    "_annual_km_source": "CBS: a privately owned electric passenger car drove on average 14.8 thousand km in 2023 (CBS news 2024/45 'Zakelijke automobilist rijdt meer elektrisch dan op diesel'; all EVs incl. business: 18.1 thousand km in 2024, provisional). The lognormal daily-distance scale is derived from this so the expected annual mileage matches it; presence coupling can only lower the realised value (see docs/ev/design.md).",
+    "use_probability": {
+      "weekday": 0.8,
+      "weekend": 0.6
+    },
+    "_use_probability_source": "Estimated, unsourced: probability that the car is driven on a given day.",
+    "departure_hour_weights": {
+      "weekday": [0.008, 0.002, 0.002, 0.002, 0.002, 0.002, 0.003, 0.03, 0.235, 0.285, 0.1, 0.045, 0.06, 0.04, 0.045, 0.037, 0.025, 0.025, 0.02, 0.015, 0.008, 0.003, 0.002, 0.0],
+      "weekend": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.005, 0.02, 0.06, 0.12, 0.15, 0.13, 0.11, 0.09, 0.08, 0.07, 0.06, 0.04, 0.03, 0.02, 0.01, 0.005, 0.0, 0.0]
+    },
+    "arrival_hour_weights": {
+      "weekday": [0, 0, 0, 0, 0, 0, 0, 180, 430, 380, 450, 480, 650, 1070, 1750, 1990, 2600, 4300, 5500, 4560, 5100, 3620, 2130, 850],
+      "weekend": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0.01, 0.02, 0.03, 0.05, 0.06, 0.08, 0.09, 0.11, 0.12, 0.12, 0.1, 0.08, 0.06, 0.04, 0.03]
+    },
+    "_hour_weights_source": "Relative weights per hour of day (index 0 = 00:00-01:00), normalised in code, so raw survey counts can be pasted in directly. weekday departure = first departure from home, digitised approximately from Brady & O'Mahony (2016) Fig. 3 (Irish EV trial, 15 cars, 4021 weekday driving days); weekday arrival = 'expected' arrival-home counts digitised approximately from their Fig. 10. Weekend arrays are estimated, unsourced (the trial covered weekdays only). Irish 2010s data, not Dutch: replace with Loenen survey data when available.",
+    "distance_lognormal_sigma": 0.8,
+    "max_daily_km": 600,
+    "min_trip_hours": 0.5,
+    "_distance_source": "Daily driven distance is lognormal; sigma 0.8 is estimated to match the shape of Brady & O'Mahony (2016) Fig. 3 (mode within 1-40 km, long tail past 100 km). Its scale is derived from annual_km, not set here.",
+    "copula_correlation": [
+      [1.0, 0.3, -0.37],
+      [0.3, 1.0, 0.2],
+      [-0.37, 0.2, 1.0]
+    ],
+    "_copula_source": "Gaussian-copula correlation between (departure time, arrival time, daily distance), the dependence-modelling approach of Lojowska, Kurowicka, Papaefthymiou & van der Sluis (2012, IEEE Trans. Power Systems 27:1960-1968) for Dutch EV demand. departure-distance -0.37 is Brady & O'Mahony's (2016) measured Pearson correlation (R(1,3)); the two arrival correlations are estimated, unsourced. Must be positive definite.",
+    "presence_coupling": {
+      "enabled": true,
+      "max_draws": 10,
+      "min_absent_fraction": 0.5
+    },
+    "_presence_coupling_note": "Ties the car to the occupancy profile: a trip window is accepted when at least min_absent_fraction of its hours have someone out of the house (n_present < num_persons). Up to max_draws candidate trips are drawn per day; if none satisfies it the best one is kept, and if nobody is ever out the car stays home that day. This repo's own design, not from the literature."
+  },
+  "plug_in": {
+    "soc_bin_upper_edges": [0.3, 0.5, 0.7, 0.9, 1.0],
+    "probability": [1.0, 0.9, 0.6, 0.35, 0.1],
+    "immediate_probability": 0.7,
+    "delay_min_hours": 0.25,
+    "delay_max_hours": 5.0,
+    "evening_check_hour": 19,
+    "model": "soc_table",
+    "logistic": {
+      "indifference_soc": 0.5,
+      "sensitivity_soc": 0.0782
+    },
+    "_model_source": "model = 'soc_table' (default): the step table above. model = 'logistic': connection probability 1 / (1 + exp((SOC - indifference_soc) / sensitivity_soc)), the univariate logit connection model of Harbrecht, McKenna, Fischer & Fichtner (2018, KIT IIP Working Paper 29, Sec. 4.2.2) and Fischer, Harbrecht, Surmann & McKenna (2019, Applied Energy 233-234:644-658). sensitivity_soc 0.0782 = sigma * sqrt(3) / pi with sigma = 14.2 %-SOC, the standard deviation of SOC at plug-in measured in three German EV fleet trials (Schaeuble et al. 2017, J. Clean. Prod. 150). indifference_soc 0.5 is their home-charging value that matched the private-household MINI E trial (0.42 vs 0.40 charging events per vehicle-day); German, 2010s data.",
+    "_source": "probability = chance of plugging in at home on arrival, by arrival SOC (bin i covers SOC up to soc_bin_upper_edges[i]); estimated, unsourced, shaped after Brady & O'Mahony's (2016) SOC-conditioned charging decision (overall P(charge overnight | charger available) = 0.55) and Lojowska et al.'s SOC < 50% scenario. Plug-in delay after arrival: ~70% immediately, ~30% spread uniformly between 15 min and 5 h, read from Brady & O'Mahony (2016) Fig. 7. evening_check_hour: on a day the car stays home unplugged, the plug-in decision is re-taken at this hour (estimated)."
+  },
+  "away_charging": {
+    "probability_per_trip_day": 0.27,
+    "fraction_of_trip_energy": 1.0,
+    "_source": "Opportunistic charging away from home (workplace, public, fast charger), on top of the forced top-up when a trip would cross soc_min. Calibrated (0.27, checked over 90 simulated generic/working_couple/family_with_children households: mean home share 0.80-0.84 for 0.28-0.22) so roughly a fifth of charged energy comes from away from home: RVO Nationaal Laadonderzoek 2025 reports EV drivers who can charge at home charge 81% of their kilometres there (6% at work, 5% public). Charged with away_charging_mode; this energy is NOT on the household meter."
+  },
+  "simulation": {
+    "warmup_days": 14,
+    "substep_hours": 0.1
+  }
+}

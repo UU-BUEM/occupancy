@@ -4,6 +4,79 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Household electric-vehicle sub-model (`occupancy.core.ev`), wired into
+  `ElectricityConsumptionProfile`. It simulates the car day by day:
+  - trips with departure time, arrival time and distance drawn jointly
+    through a Gaussian copula, tied to the household's own presence;
+  - a battery state of charge carried across days;
+  - a SOC-dependent plug-in decision with a realistic delay;
+  - charging limited by charger and car power, with a charging
+    efficiency and a taper near full;
+  - opportunistic and forced charging away from home.
+
+  New profile columns: `ev_charging_kw`, `ev_plugged_in`, `ev_at_home`,
+  `ev_soc`, `ev_stored_kwh`, `ev_drive_kwh`, `ev_away_charging_kwh`,
+  `total_power_incl_ev_kwh`. `ev_summary()` reports annual indicators
+  (km, kWh at home and away, sessions, equivalent full cycles). Method,
+  sources and calibration (CBS 14,800 km/yr, RVO's 81% home-charging
+  share, Brady & O'Mahony 2016, Lojowska et al. 2012):
+  `docs/ev/design.md`.
+- Two optional EV behaviours, both off by default:
+  - `plug_in.model = "logistic"`: the SOC-dependent logistic connection
+    decision of Harbrecht et al. (2018) and Fischer et al. (2019).
+  - `home_charging_start_hour`: a charging timer that delays home
+    charging to a clock hour, such as the start of an off-peak tariff,
+    while the car stays connected from plug-in.
+
+  The publication reference list is in `docs/ev/references.md` and
+  `docs/ev/references.bib`.
+- EV parameters live in `households/data/ev.json`, outside
+  `equipment.json`. Override them per call with a dict, a JSON file or an
+  `EVConfig` (`ev_config=`, `load_ev_config()`); unknown keys raise.
+  Charger power (default 7.4 kW) and the slow (home) / fast (away)
+  charging modes are user-defined. Ownership probability defaults to 0.20
+  (Loenen).
+- `has_ev` on `ElectricityConsumptionProfile`: `True` (default,
+  individual household), `False`, or `None` (unknown: drawn from the
+  ownership probability, for community analysis). `MultiDwellingProfile`
+  defaults to `None`, sums EV columns across dwellings and reports `n_ev`.
+- `ev_charging_kw=` accepts a measured charging series in place of the
+  simulation, and `occupancy.subtract_ev_load()` removes EV charging from
+  a metered household total (e.g. survey data) before it is used as
+  `elecLoad`.
+- CLI flags `--ev/--no-ev`, `--ev-ownership-probability`,
+  `--ev-charger-kw` and `--ev-config`. Scenario files take an `"ev"`
+  section.
+- `to_buem_profiles()` passes the EV series through when the profile has
+  an EV: `ev_charging_kw`, `ev_plugged_in`, `ev_drive_kwh`,
+  `ev_away_charging_kwh` and `ev_stored_kwh` (battery energy at the end
+  of each hour, so a downstream optimiser can start and end the battery
+  at the simulated car's levels).
+
+### Changed
+
+- **Breaking:** EV charging is no longer part of `total_power_kwh`
+  (buem's `elecLoad`). It used to add up to 7.4 kW of internal heat gain
+  whenever the car charged. Downstream models that took EV demand from
+  `elecLoad` (e.g. an energy-system model built on buem's `elec_kW`) must
+  now take it from `ev_charging_kw`.
+- **Breaking:** households now have an EV by default (`has_ev=True`), as
+  requested for individual-household analysis. `total_power_kwh` is
+  unaffected; pass `has_ev=False` for a household without one.
+
+### Removed
+
+- **Breaking:** the `ev_charger` row in `households/data/equipment.json`
+  (household equipment items: 37 → 36). It modeled the EV as a fixed
+  4-hour, 7.4 kW block on 60% of days (~6,500 kWh/yr, ~2.8 times the
+  ~2,300 kWh/yr implied by CBS mileage and RVO's home-charging share),
+  unrelated to trips, battery state or occupancy. Because ownership is
+  drawn in item-name order, removing it shifts the ownership draws of
+  later-sorted appliances for a given seed. The
+  `overnight_charging_session` strategy stays registered for other uses.
+
 ### Documentation
 
 - `CONTRIBUTING.md` gains "Scope: What Belongs in occupancy" (what

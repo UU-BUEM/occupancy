@@ -67,7 +67,19 @@ def test_household_result_needs_equipment_wrapper() -> None:
     ).to_result()
     buem_profiles = to_buem_profiles(with_equipment)
 
-    assert set(buem_profiles) == _EXPECTED_KEYS_WITH_EQUIPMENT
+    # Households carry an EV by default; its series come back separately
+    # and charging is never part of elecLoad (internal gains).
+    assert set(buem_profiles) == _EXPECTED_KEYS_WITH_EQUIPMENT | {
+        "ev_charging_kw",
+        "ev_plugged_in",
+        "ev_drive_kwh",
+        "ev_away_charging_kwh",
+        "ev_stored_kwh",
+    }
+    pd.testing.assert_series_equal(
+        buem_profiles["elecLoad"],
+        with_equipment.profile["total_power_kwh"].rename("elecLoad"),
+    )
     # occ_sleeping is real generator output (n_asleep / num_persons), not a
     # heuristic, whenever the profile carries an n_asleep column.
     expected_sleeping = (

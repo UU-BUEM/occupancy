@@ -2042,28 +2042,5 @@
       0.8, 0.8, 0.7, 0.5, 0.3, 0.7, 0.8, 0.8, 0.5, 0.2, 0.05, 0.01
     ]
   },
-  "ev_charger": {
-    "name": "ev_charger",
-    "category": "ev_charging",
-    "rated_power_kw": 7.4,
-    "standby_power_kw": 0.0,
-    "ownership_probability": 0.06,
-    "strategy": "overnight_charging_session",
-    "strategy_params": {
-      "daily_probability": 0.6,
-      "window_start_hour": 18,
-      "window_end_hour": 30,
-      "duration_hours": 4,
-      "occupant_scaling": 0.0
-    },
-    "_source": "ownership_probability sourced from CBS (2025), 'Meer dan 1 miljoen stekkerauto's in Nederland' (https://www.cbs.nl/nl-nl/nieuws/2025/22/meer-dan-1-miljoen-stekkerauto-s-in-nederland): 6% of NL private passenger cars are plug-in as of early 2025. rated_power_kw (7.4 kW single-phase 32A home wallbox) and strategy_params (evening/overnight plug-in window, ~4h session, not charged every day) are estimated, unsourced -- not CREST (no EVs in its 2008 UK dataset). Needed a genuinely new trigger strategy (core.equipment.overnight_charging_session) since a multi-hour near-constant session gated on occupancy is not what probabilistic_event/sessions_per_week model. Needs verification.",
-    "weekday": [
-      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-    ],
-    "weekend": [
-      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-    ]
-  }
+  "_ev_comment": "Electric vehicles are intentionally not in this table. An EV is a stateful battery (trips, state of charge, plug-in behaviour), not an hourly-triggered appliance, and its charging is not an internal heat gain, so it must not enter total_power_kwh. See households/data/ev.json, occupancy.core.ev and docs/ev/design.md. (The ev_charger row that lived here until 6.1.x was removed.)"
 }
